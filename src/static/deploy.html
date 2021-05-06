@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Quick Deploy Demo</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link href="https://fonts.googleapis.com/css?family=Inter" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+  <div class="content">
+    <h1>
+      Deploy <strong>{ src.owner }/{ src.name }</strong> to Compute@Edge
+    </h1>
+    <h2>
+      This shouldn't take longer than a minute.
+    </h2>
+
+    <br/><br/>
+
+    <div class="steps">
+      {{ if not github_user }}
+      <div class="step">
+        <h1><span>1.</span> Connect to GitHub</h1>
+        <p>Connecting your account allows us to fork <strong>{ src.name }</strong> to your account and set up GitHub Actions.</p]>
+        <form action="/oauth/github" method="get">
+          <input type="submit" value="Log in with GitHub">
+        </form>
+      </div>
+      {{ else }}
+      <div class="step complete">
+        <p>Signed in to GitHub as <a href="https://github.com/{ github_user.username }">@{ github_user.username }</a>.</p>
+      </div>
+      {{ endif }}
+
+      {{ if not fastly_user }}
+      <div class="step">
+        <h1><span>2.</span> Connect to Fastly</h1>
+        <p>You need to provide your Fastly API token so we can provision a new Compute@Edge service to deploy <strong>{ src.name }</strong> to.</p>
+        <br/>
+        <form action="/auth/fastly" method="post">
+          <label for="token">Fastly API token:</label><br>
+          <input type="text" id="token" name="token" placeholder="A9E_kNaWQW8GQAwB_dZIijAIy6hHtMnk"/><br>
+          <input type="submit" value="Login">
+        </form>
+      </div>
+      {{ else }}
+      <div class="step complete">
+        <p>Signed in to { fastly_user.account }'s Fastly account as { fastly_user.name }</p>
+      </div>
+      {{ endif }}
+
+      {{ if can_deploy }}
+      <div class="step">
+        <h1><span>3.</span> Deploy Application</h1>
+        <p>This will deploy <strong>{ src.name }</strong> as a new Compute@Edge service on the <strong>{ fastly_user.account }</strong> account.</p>
+        <p>A new repository will be created at <kbd>github.com/{ github_user.username }/{ src.name }</kbd>.</p>
+
+        <form action="/deploy">
+          <input type="hidden" id="repository" value="{ src.owner }/{ src.name}" />
+          <input type="submit" value="Deploy" onclick="alert('this bit doesn\'t work yet');">
+        </form>
+      </div>
+      {{ else }}
+      <div class="step">
+        <h1><span>3.</span> Deploy Application</h1>
+        <p>This will deploy <strong>{ src.name }</strong> as a new Compute@Edge service on {{ if fastly_user }}the <strong>{ fastly_user.account }</strong>{{ else }}your Fastly{{ endif }} account.</p>
+        <p>A new repository will be created {{ if github_user }}at <kbd>github.com/{ github_user.username }/{ src.name }</kbd>{{ else }}on your GitHub account{{ endif }}.</p>
+
+        <form>
+          <input type="submit" value="Deploy" disabled>
+        </form>
+      </div>
+      {{ endif }}
+    </div>
+  </div>
+</body>
+
+</html>
