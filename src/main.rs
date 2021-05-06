@@ -21,7 +21,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
 
     let gh_user = gh.fetch_user();
 
-    let fastly_client = if let Some(token) = get_cookie(&cookies, "__Secure-Fastly-Token") {
+    let mut fastly_client = if let Some(token) = get_cookie(&cookies, "__Secure-Fastly-Token") {
         FastlyClient::from_token(token)
     } else {
         FastlyClient::new()
@@ -51,8 +51,17 @@ fn main(mut req: Request) -> Result<Response, Error> {
         "/auth/fastly" => {
             let form: scdn::AuthParams = req.take_body_form().unwrap();
 
-            let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/fastly/compute-starter-kit-rust-static-content");
-            Ok(set_cookie(resp, "__Secure-Fastly-Token", &form.token))
+            fastly_client.token = Some(form.token.to_owned());
+            match fastly_client.fetch_user() {
+                Some(user) => {
+                    let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/fastly/compute-starter-kit-rust-static-content");
+                    Ok(set_cookie(resp, "__Secure-Fastly-Token", &form.token))
+                },
+                None => {
+                    let mut resp = Response::from_status(StatusCode::UNAUTHORIZED).with_header(header::LOCATION, "/fastly/compute-starter-kit-rust-static-content");
+                    Ok(resp)
+                }
+            }
         },
 
         "/oauth/github" => Ok(Response::from_status(StatusCode::FOUND)
