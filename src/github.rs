@@ -28,7 +28,11 @@ impl GitHubClient {
   }
 
   pub fn github_request(&self, req: Request) -> Request {
-    req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::ACCEPT, "application/json")
+    let mut req = req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::ACCEPT, "application/json");
+    if let Some(token) = &self.user_access_token {
+      req.set_header(header::AUTHORIZATION, format!("token {}", token));
+    }
+    req
   }
 
   pub fn get_authorize_url(&self) -> String {
@@ -42,6 +46,25 @@ impl GitHubClient {
     let token: AccessTokenResponse = req.send(AUTH_BACKEND).unwrap().take_body_json().unwrap();
     token.access_token
   }
+
+  pub fn fetch_user(&self) -> Option<GitHubUser> {
+    if self.user_access_token == None {
+      return None
+    }
+
+    let req = self.github_request(Request::new(Method::GET, "https://api.github.com/user"));
+    let mut resp = req.send(API_BACKEND).unwrap();
+    match resp.take_body_json::<GitHubUser>() {
+      Ok(user) => Some(user),
+      Err(e) => None
+    }
+  }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct GitHubUser {
+  pub login: String,
+  pub name: String
 }
 
 #[derive(Deserialize)]

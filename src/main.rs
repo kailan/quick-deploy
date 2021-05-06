@@ -1,10 +1,11 @@
 mod github;
+mod scdn;
 mod templates;
 
 use std::collections::HashMap;
-use serde::Deserialize;
 
-use github::{AuthParams, GitHubClient};
+use github::GitHubClient;
+use scdn::FastlyClient;
 use templates::{DeployContext, SourceRepository, TemplateRenderer};
 
 use fastly::http::{header, StatusCode};
@@ -18,17 +19,15 @@ fn main(mut req: Request) -> Result<Response, Error> {
     let cookies = get_cookies(&req);
     gh.user_access_token = get_cookie(&cookies, "__Secure-GH-Token");
 
-    let gh_user = if let Some(_) = gh.user_access_token {
-        Some(templates::GitHubUser { username: "kailan".to_string() })
+    let gh_user = gh.fetch_user();
+
+    let fastly_client = if let Some(token) = get_cookie(&cookies, "__Secure-Fastly-Token") {
+        FastlyClient::from_token(token)
     } else {
-        None
+        FastlyClient::new()
     };
 
-    let fastly_user = if let Some(_) = get_cookie(&cookies, "__Secure-Fastly-Token") {
-        Some(templates::FastlyUser { name: "Kailan Blanks".to_string(), account: "Enviark".to_string() })
-    } else {
-        None
-    };
+    let fastly_user = fastly_client.fetch_user();
 
     match req.get_path() {
         // If request is to the `/` path, send a default response.
@@ -50,7 +49,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
         },
 
         "/auth/fastly" => {
-            let form: FastlyAuthForm = req.take_body_form().unwrap();
+            let form: scdn::AuthParams = req.take_body_form().unwrap();
 
             let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/fastly/compute-starter-kit-rust-static-content");
             Ok(set_cookie(resp, "__Secure-Fastly-Token", &form.token))
@@ -59,7 +58,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
         "/oauth/github" => Ok(Response::from_status(StatusCode::FOUND)
             .with_header(header::LOCATION, gh.get_authorize_url())),
 
-        "/oauth/github/callback" => match req.get_query::<AuthParams>() {
+        "/oauth/github/callback" => match req.get_query::<github::AuthParams>() {
             Ok(auth) => {
                 let token = gh.get_access_token_from_params(auth);
                 gh.user_access_token = Some(token.to_owned());
@@ -106,9 +105,4 @@ fn parse_cookies_to_map(value: &str) -> HashMap<&str, &str> {
         jar.insert(split.next().unwrap(), split.next().unwrap());
     }
     jar
-}
-
-#[derive(Deserialize)]
-struct FastlyAuthForm {
-    token: String
 }

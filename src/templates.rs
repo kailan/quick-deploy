@@ -1,3 +1,6 @@
+use crate::scdn::FastlyUser;
+use crate::github::GitHubUser;
+
 use tinytemplate::TinyTemplate;
 use serde::Serialize;
 
@@ -11,17 +14,6 @@ pub struct DeployContext {
   pub github_user: Option<GitHubUser>,
   pub fastly_user: Option<FastlyUser>,
   pub can_deploy: bool
-}
-
-#[derive(Serialize)]
-pub struct GitHubUser {
-  pub username: String,
-}
-
-#[derive(Serialize)]
-pub struct FastlyUser {
-  pub name: String,
-  pub account: String
 }
 
 #[derive(Serialize)]
