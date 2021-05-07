@@ -22,7 +22,7 @@ impl FastlyClient {
   }
 
   pub fn fastly_request(&self, req: Request) -> Request {
-    req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::HOST, "api.fastly.com").with_header(header::ACCEPT, "application/json").with_header("Fastly-Key", self.token.as_ref().unwrap())
+    req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::HOST, "api.fastly.com").with_header(header::ACCEPT, "application/json").with_header("Fastly-Key", self.token.as_ref().unwrap()).with_pass(true)
   }
 
   pub fn fetch_user(&self) -> Option<FastlyUser> {

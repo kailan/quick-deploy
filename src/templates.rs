@@ -13,7 +13,8 @@ pub struct DeployContext {
   pub src: SourceRepository,
   pub github_user: Option<GitHubUser>,
   pub fastly_user: Option<FastlyUser>,
-  pub can_deploy: bool
+  pub can_deploy: bool,
+  pub app_git_sha: String
 }
 
 #[derive(Serialize)]

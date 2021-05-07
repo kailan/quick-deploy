@@ -8,7 +8,7 @@ use github::GitHubClient;
 use scdn::FastlyClient;
 use templates::{DeployContext, SourceRepository, TemplateRenderer};
 
-use fastly::http::{header, StatusCode};
+use fastly::http::{header, StatusCode, Method};
 use fastly::{mime, Error, Request, Response};
 
 #[fastly::main]
@@ -29,9 +29,9 @@ fn main(mut req: Request) -> Result<Response, Error> {
 
     let fastly_user = fastly_client.fetch_user();
 
-    match req.get_path() {
+    match (req.get_method(), req.get_path()) {
         // If request is to the `/` path, send a default response.
-        "/fastly/compute-starter-kit-rust-static-content" => Ok(Response::from_status(StatusCode::OK)
+        (&Method::GET, "/fastly/compute-starter-kit-rust-static-content") => Ok(Response::from_status(StatusCode::OK)
             .with_content_type(mime::TEXT_HTML_UTF_8)
             .with_body(pages.render_deploy_page(DeployContext {
                 src: SourceRepository {
@@ -41,14 +41,15 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 can_deploy: gh_user.is_some() && fastly_user.is_some(),
                 github_user: gh_user,
                 fastly_user,
+                app_git_sha: env!("GIT_HASH").to_string()
             }))),
 
-        "/deploy" => {
+        (&Method::POST, "/deploy") => {
             Ok(Response::from_status(StatusCode::NOT_IMPLEMENTED)
             .with_body_str("Endpoint not implemented\n"))
         },
 
-        "/auth/fastly" => {
+        (&Method::POST, "/auth/fastly") => {
             let form: scdn::AuthParams = req.take_body_form().unwrap();
 
             fastly_client.token = Some(form.token.to_owned());
@@ -58,16 +59,16 @@ fn main(mut req: Request) -> Result<Response, Error> {
                     Ok(set_cookie(resp, "__Secure-Fastly-Token", &form.token))
                 },
                 None => {
-                    let mut resp = Response::from_status(StatusCode::UNAUTHORIZED).with_header(header::LOCATION, "/fastly/compute-starter-kit-rust-static-content");
+                    let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/fastly/compute-starter-kit-rust-static-content");
                     Ok(resp)
                 }
             }
         },
 
-        "/oauth/github" => Ok(Response::from_status(StatusCode::FOUND)
+        (&Method::GET, "/oauth/github") => Ok(Response::from_status(StatusCode::FOUND)
             .with_header(header::LOCATION, gh.get_authorize_url())),
 
-        "/oauth/github/callback" => match req.get_query::<github::AuthParams>() {
+        (&Method::GET, "/oauth/github/callback") => match req.get_query::<github::AuthParams>() {
             Ok(auth) => {
                 let token = gh.get_access_token_from_params(auth);
                 gh.user_access_token = Some(token.to_owned());
@@ -79,7 +80,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 .with_body_str("No auth 'code' param provided\n")),
         },
 
-        "/style.css" => Ok(Response::from_body(include_str!("static/style.css")).with_content_type(mime::TEXT_CSS)),
+        (&Method::GET, "/style.css") => Ok(Response::from_body(include_str!("static/style.css")).with_content_type(mime::TEXT_CSS)),
 
         // Catch all other requests and return a 404.
         _ => Ok(Response::from_status(StatusCode::NOT_FOUND)

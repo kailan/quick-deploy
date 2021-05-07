@@ -28,7 +28,7 @@ impl GitHubClient {
   }
 
   pub fn github_request(&self, req: Request) -> Request {
-    let mut req = req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::ACCEPT, "application/json");
+    let mut req = req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::ACCEPT, "application/json").with_pass(true);
     if let Some(token) = &self.user_access_token {
       req.set_header(header::AUTHORIZATION, format!("token {}", token));
     }
@@ -41,7 +41,7 @@ impl GitHubClient {
 
   pub fn get_access_token_from_params(&mut self, params: AuthParams) -> String {
     let req = self.github_request(Request::new(Method::POST, "https://github.com/login/oauth/access_token"))
-      .with_body_json(&AccessTokenRequest::from_code(self, params.code)).unwrap();
+      .with_body_json(&AccessTokenRequest::from_code(self, params.code)).unwrap().with_pass(true);
 
     let token: AccessTokenResponse = req.send(AUTH_BACKEND).unwrap().take_body_json().unwrap();
     token.access_token

@@ -42,9 +42,12 @@ body {
   animation-delay: 300ms;
 }
 
-
 .step.complete {
   border-color: #23E0A8;
+}
+
+.step.disabled {
+  border-bottom: none;
 }
 
 .step h1 {
@@ -52,9 +55,13 @@ body {
   margin-bottom: 1rem;
 }
 
-.step h1 span {
+.step h1 span, .step p span {
   font-weight: bolder;
   font-size: 1.4rem;
+}
+
+.step p span {
+  margin-right: 4px;
 }
 
 h1, h2, p {
@@ -69,6 +76,7 @@ a {
 }
 
 input[type=text] {
+  border-radius: 6px;
   margin-top: 8px;
   padding: 12px;
   width: 50%;
@@ -113,4 +121,14 @@ input[type=submit]:disabled {
     transform: none;
     opacity: 1;
   }
+}
+
+.footer {
+  display: flex;
+  justify-content: space-around;
+}
+
+.footer a {
+  color: #2D3741;
+  padding-bottom: 64px;
 }

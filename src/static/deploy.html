@@ -31,7 +31,7 @@
       </div>
       {{ else }}
       <div class="step complete">
-        <p>Signed in to GitHub as <a href="https://github.com/{ github_user.login }">@{ github_user.login }</a>.</p>
+        <p><span>1.</span> Signed in to GitHub as <a href="https://github.com/{ github_user.login }" target="_blank">@{ github_user.login }</a>.</p>
       </div>
       {{ endif }}
 
@@ -41,14 +41,13 @@
         <p>You need to provide your Fastly API token so we can provision a new Compute@Edge service to deploy <strong>{ src.name }</strong> to.</p>
         <br/>
         <form action="/auth/fastly" method="post">
-          <label for="token">Fastly API token:</label><br>
           <input type="text" id="token" name="token" placeholder="A9E_kNaWQW8GQAwB_dZIijAIy6hHtMnk"/><br>
           <input type="submit" value="Login">
         </form>
       </div>
       {{ else }}
       <div class="step complete">
-        <p>Signed in to { fastly_user.name }'s Fastly account (cid <kbd>{ fastly_user.customer_id }</kbd>)</p>
+        <p><span>2.</span> Signed in to { fastly_user.name }'s Fastly account (cid <kbd>{ fastly_user.customer_id }</kbd>)</p>
       </div>
       {{ endif }}
 
@@ -64,7 +63,7 @@
         </form>
       </div>
       {{ else }}
-      <div class="step">
+      <div class="step disabled">
         <h1><span>3.</span> Deploy Application</h1>
         <p>This will deploy <strong>{ src.name }</strong> as a new Compute@Edge service on {{ if fastly_user }}Fastly account <kbd>{ fastly_user.customer_id }</kbd>{{ else }}your Fastly account{{ endif }}.</p>
         <p>A new repository will be created {{ if github_user }}at <kbd>github.com/{ github_user.login }/{ src.name }</kbd>{{ else }}on your GitHub account{{ endif }}.</p>
@@ -75,6 +74,10 @@
       </div>
       {{ endif }}
     </div>
+  </div>
+
+  <div class="footer">
+    <a href="https://github.com/kailan/quick-deploy">Powered by quick-deploy ({ app_git_sha })</a>
   </div>
 </body>
 
