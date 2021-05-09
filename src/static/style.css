@@ -3,6 +3,8 @@ body {
 }
 
 .content {
+  display: flex;
+  flex-direction: column;
   font-size: 1.1rem;
   margin: 4%;
   padding: 32px;
@@ -15,6 +17,21 @@ body {
   margin-top: 8px;
   color: #2D3741;
   font-weight: lighter;
+}
+
+.repo {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.repo .stat {
+  font-weight: bold;
+  margin-right: 16px;
+}
+
+.repo .stat svg {
+  transform: translateY(6px);
 }
 
 .step {
@@ -30,6 +47,10 @@ body {
   animation-fill-mode: forwards;
 }
 
+.step:hover {
+  background-color: #F2F5F7;
+}
+
 .step:nth-child(1) {
   animation-delay: 100ms;
 }
@@ -40,6 +61,10 @@ body {
 
 .step:nth-child(3) {
   animation-delay: 300ms;
+}
+
+.step:nth-child(4) {
+  animation-delay: 400ms;
 }
 
 .step.complete {
@@ -64,10 +89,18 @@ body {
   margin-right: 4px;
 }
 
-h1, h2, p {
+h1, h2, p, code {
   color: #182931;
   margin: 0;
+  margin-bottom: 8px;
   padding: 0;
+}
+
+code {
+  margin: 16px 0;
+  border: 1px solid #182931;
+  padding: 16px;
+  border-radius: 6px;
 }
 
 a {
@@ -121,14 +154,4 @@ input[type=submit]:disabled {
     transform: none;
     opacity: 1;
   }
-}
-
-.footer {
-  display: flex;
-  justify-content: space-around;
-}
-
-.footer a {
-  color: #2D3741;
-  padding-bottom: 64px;
 }

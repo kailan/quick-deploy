@@ -1,4 +1,4 @@
-use fastly::{Request, Dictionary, http::{Method, header}};
+use fastly::{Request, Dictionary, http::{Method, header, StatusCode}};
 use serde::{Serialize, Deserialize};
 
 const AUTH_BACKEND: &str = "github.com";
@@ -27,10 +27,19 @@ impl GitHubClient {
     }
   }
 
+  pub fn anonymous(self) -> GitHubClient {
+    GitHubClient {
+      client_id: self.client_id,
+      client_secret: self.client_secret,
+      user_access_token: None
+    }
+  }
+
   pub fn github_request(&self, req: Request) -> Request {
-    let mut req = req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::ACCEPT, "application/json").with_pass(true);
+    let mut req = req.with_header(header::USER_AGENT, USER_AGENT).with_header(header::ACCEPT, "application/json");
     if let Some(token) = &self.user_access_token {
       req.set_header(header::AUTHORIZATION, format!("token {}", token));
+      req.set_pass(true);
     }
     req
   }
@@ -56,15 +65,54 @@ impl GitHubClient {
     let mut resp = req.send(API_BACKEND).unwrap();
     match resp.take_body_json::<GitHubUser>() {
       Ok(user) => Some(user),
-      Err(e) => None
+      Err(_) => None
+    }
+  }
+
+  pub fn fetch_repository(&self, nwo: &str) -> Option<GitHubRepository> {
+    let req = self.github_request(Request::new(Method::GET, format!("https://api.github.com/repos/{}", nwo)));
+    let mut resp = req.send(API_BACKEND).unwrap();
+    match resp.take_body_json::<GitHubRepository>() {
+      Ok(repo) => Some(repo),
+      Err(_) => None
+    }
+  }
+
+  pub fn fork_repository(&self, nwo: &str) -> Option<GitHubRepository> {
+    let req = self.github_request(Request::new(Method::POST, format!("https://api.github.com/repos/{}/forks", nwo)));
+    let mut resp = req.send(API_BACKEND).unwrap();
+    match resp.take_body_json::<GitHubRepository>() {
+      Ok(repo) => Some(repo),
+      Err(_) => None
+    }
+  }
+
+  pub fn get_file(&self, nwo: &str, path: &str) -> Option<String> {
+    let mut req = self.github_request(Request::new(Method::GET, format!("https://api.github.com/repos/{}/contents/{}", nwo, path)));
+    req.set_header(header::ACCEPT, "application/vnd.github.v3.raw");
+    let mut resp = req.send(API_BACKEND).unwrap();
+    match resp.get_status() {
+      StatusCode::OK => {
+        Some(resp.take_body_str())
+      },
+      _ => None
     }
   }
 }
 
 #[derive(Deserialize, Serialize)]
+pub struct GitHubRepository {
+  pub name: String,
+  pub default_branch: String,
+  pub owner: GitHubUser,
+  pub forks_count: i32,
+  pub stargazers_count: i32
+}
+
+#[derive(Deserialize, Serialize)]
 pub struct GitHubUser {
   pub login: String,
-  pub name: String
+  pub name: Option<String>
 }
 
 #[derive(Deserialize)]

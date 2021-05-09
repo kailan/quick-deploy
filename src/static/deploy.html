@@ -11,12 +11,26 @@
 
 <body>
   <div class="content">
-    <h1>
-      Deploy <strong>{ src.owner }/{ src.name }</strong> to Compute@Edge
-    </h1>
-    <h2>
-      This shouldn't take longer than a minute.
-    </h2>
+    <div class="repo">
+      <div>
+        <h1>
+          Deploy <strong>{ src.owner.login }/{ src.name }</strong> to Compute@Edge
+        </h1>
+        <h2>
+          This shouldn't take longer than a minute.
+        </h2>
+      </div>
+      <div>
+        <span class="stat">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill-rule="evenodd" d="M12 .25a.75.75 0 01.673.418l3.058 6.197 6.839.994a.75.75 0 01.415 1.279l-4.948 4.823 1.168 6.811a.75.75 0 01-1.088.791L12 18.347l-6.117 3.216a.75.75 0 01-1.088-.79l1.168-6.812-4.948-4.823a.75.75 0 01.416-1.28l6.838-.993L11.328.668A.75.75 0 0112 .25zm0 2.445L9.44 7.882a.75.75 0 01-.565.41l-5.725.832 4.143 4.038a.75.75 0 01.215.664l-.978 5.702 5.121-2.692a.75.75 0 01.698 0l5.12 2.692-.977-5.702a.75.75 0 01.215-.664l4.143-4.038-5.725-.831a.75.75 0 01-.565-.41L12 2.694z"></path></svg>
+          { src.stargazers_count }
+        </span>
+        <span class="stat">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill-rule="evenodd" d="M12 21a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm-3.25-1.75a3.25 3.25 0 106.5 0 3.25 3.25 0 00-6.5 0zm-3-12.75a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zM2.5 4.75a3.25 3.25 0 106.5 0 3.25 3.25 0 00-6.5 0zM18.25 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zM15 4.75a3.25 3.25 0 106.5 0 3.25 3.25 0 00-6.5 0z"></path><path fill-rule="evenodd" d="M6.5 7.75v1A2.25 2.25 0 008.75 11h6.5a2.25 2.25 0 002.25-2.25v-1H19v1a3.75 3.75 0 01-3.75 3.75h-6.5A3.75 3.75 0 015 8.75v-1h1.5z"></path><path fill-rule="evenodd" d="M11.25 16.25v-5h1.5v5h-1.5z"></path></svg>
+          { src.forks_count }
+        </span>
+      </div>
+    </div>
 
     <br/><br/>
 
@@ -47,26 +61,54 @@
       </div>
       {{ else }}
       <div class="step complete">
-        <p><span>2.</span> Signed in to { fastly_user.name }'s Fastly account (cid <kbd>{ fastly_user.customer_id }</kbd>)</p>
+        <p><span>2.</span> Signed in to { fastly_user.name }'s Fastly account (cid <kbd>{ fastly_user.customer_id }</kbd>).</p>
       </div>
+      {{ endif }}
+
+      {{ if not dest_nwo }}
+        {{ if can_fork }}
+        <div class="step">
+          <h1><span>3.</span> Fork Repository</h1>
+          <p>A new repository will be created at <kbd>github.com/{ github_user.login }/{ src.name }</kbd>.</p>
+
+          <form action="/fork" method="post">
+            <input type="hidden" name="repository" value="{ src.owner.login }/{ src.name}" />
+            <input type="submit" value="Fork">
+          </form>
+        </div>
+        {{ else }}
+        <div class="step disabled">
+          <h1><span>3.</span> Fork Repository</h1>
+          <p>A new repository will be created {{ if github_user }}at <kbd>github.com/{ github_user.login }/{ src.name }</kbd>{{ else }}on your GitHub account{{ endif }}.</p>
+
+          <form>
+            <input type="submit" value="Fork" disabled>
+          </form>
+        </div>
+        {{ endif }}
+      {{ else }}
+        <div class="step complete">
+          <p><span>3.</span> Repository created at <kbd>github.com/{ dest_nwo }</kbd>.</p>
+        </div>
       {{ endif }}
 
       {{ if can_deploy }}
       <div class="step">
-        <h1><span>3.</span> Deploy Application</h1>
+        <h1><span>4.</span> Deploy Application</h1>
         <p>This will deploy <strong>{ src.name }</strong> as a new Compute@Edge service on the Fastly account <strong>{ fastly_user.customer_id }</strong>.</p>
-        <p>A new repository will be created at <kbd>github.com/{ github_user.login }/{ src.name }</kbd>.</p>
+        <p>The <kbd>fastly.toml</kbd> in your newly-created repository will be updated to include the new service's ID.</p>
 
-        <form action="/deploy">
-          <input type="hidden" id="repository" value="{ src.owner }/{ src.name}" />
-          <input type="submit" value="Deploy" onclick="alert('this bit doesn\'t work yet');">
+        <form action="/deploy" method="post">
+          <input type="hidden" name="src" value="{ src.owner.login }/{ src.name}" />
+          <input type="hidden" name="dest" value="{ dest_nwo }" />
+          <input type="submit" value="Deploy">
         </form>
       </div>
       {{ else }}
       <div class="step disabled">
-        <h1><span>3.</span> Deploy Application</h1>
+        <h1><span>4.</span> Deploy Application</h1>
         <p>This will deploy <strong>{ src.name }</strong> as a new Compute@Edge service on {{ if fastly_user }}Fastly account <kbd>{ fastly_user.customer_id }</kbd>{{ else }}your Fastly account{{ endif }}.</p>
-        <p>A new repository will be created {{ if github_user }}at <kbd>github.com/{ github_user.login }/{ src.name }</kbd>{{ else }}on your GitHub account{{ endif }}.</p>
+        <p>The <kbd>fastly.toml</kbd> in your newly-created repository will be updated to include the new service's ID.</p>
 
         <form>
           <input type="submit" value="Deploy" disabled>
@@ -74,10 +116,6 @@
       </div>
       {{ endif }}
     </div>
-  </div>
-
-  <div class="footer">
-    <a href="https://github.com/kailan/quick-deploy">Powered by quick-deploy ({ app_git_sha })</a>
   </div>
 </body>
 

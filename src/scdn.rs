@@ -34,7 +34,7 @@ impl FastlyClient {
     let mut resp = req.send(API_BACKEND).unwrap();
     match resp.take_body_json::<FastlyUser>() {
       Ok(user) => Some(user),
-      Err(e) => None
+      Err(_) => None
     }
   }
 }
