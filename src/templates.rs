@@ -27,7 +27,8 @@ pub struct ErrorContext {
 pub struct SuccessContext {
   pub application_url: String,
   pub actions_url: String,
-  pub repo: GitHubRepository
+  pub repo_nwo: String,
+  pub service_id: String
 }
 
 impl TemplateRenderer<'_> {

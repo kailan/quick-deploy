@@ -11,3 +11,5 @@ debug = true
 fastly = "^0.6.0"
 serde = { version = "1.0", features = [ "derive" ] }
 tinytemplate = "^1.2"
+toml = "^0.5"
+base64 = "^0.13"

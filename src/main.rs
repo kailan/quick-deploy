@@ -5,9 +5,11 @@ mod templates;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use toml::Value;
+
 use github::GitHubClient;
 use scdn::FastlyClient;
-use templates::{DeployContext, ErrorContext, TemplateRenderer};
+use templates::{DeployContext, ErrorContext, SuccessContext, TemplateRenderer};
 
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
@@ -75,6 +77,9 @@ fn main(mut req: Request) -> Result<Response, Error> {
             // Parse the form params to get the src and dest repository
             let params: DeployParams = req.take_body_form().unwrap();
 
+            println!("Deploying {}", params.dest);
+
+            // Fetch fastly.toml file from repo
             let manifest = match gh.get_file(&params.dest, "fastly.toml") {
                 Some(file) => file,
                 None => return Ok(Response::from_status(StatusCode::NOT_FOUND)
@@ -83,13 +88,38 @@ fn main(mut req: Request) -> Result<Response, Error> {
                     message: "Unable to read manifest file from repository. Either the forked repo is not a C@E project, or your fork is not yet ready.".to_string(),
                 })))
             };
+            println!("Fetched manifest");
 
-            println!("{}", manifest);
+            // Parse manifest TOML
+            let mut value = manifest.content.parse::<Value>().unwrap();
+            let table = value.as_table_mut().unwrap();
+            println!("Parsed manifest");
+
+            // Create Fastly service
+            let service = fastly_client.create_service(&gh_user.unwrap().login).unwrap();
+            println!("Service created (ID {})", service.id);
+
+            // Update service ID in manifest
+            table.insert("service_id".to_string(), Value::String(service.id.to_owned()));
+
+            // Generate output manifest
+            let output = toml::to_string(&table).unwrap();
+            println!("Generated updated manifest");
+
+            println!("Enabling actions in forked repository");
+            gh.enable_actions(&params.dest);
+
+            // Update manifest in GitHub repo
+            gh.upsert_file(&params.dest, &manifest, &output);
+            println!("Manifest pushed to repository");
 
             return Ok(Response::from_status(StatusCode::NOT_IMPLEMENTED)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
-                .with_body(pages.render_error_page(ErrorContext {
-                    message: "<TODO> create Fastly service, trigger service ID update in manifest".to_string(),
+                .with_body(pages.render_success_page(SuccessContext {
+                    application_url: format!("https://{}", &service.domain.unwrap()),
+                    actions_url: format!("https://github.com/{}/actions", params.dest),
+                    repo_nwo: params.dest,
+                    service_id: service.id
                 })))
         },
 
