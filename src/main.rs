@@ -11,7 +11,7 @@ use toml::Value;
 use github::GitHubClient;
 use scdn::FastlyClient;
 use config::{DeployConfig, DeployConfigSpec};
-use templates::{DeployContext, ErrorContext, SuccessContext, TemplateRenderer};
+use templates::{IndexContext, DeployContext, ErrorContext, SuccessContext, TemplateRenderer};
 
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
@@ -57,6 +57,18 @@ fn main(mut req: Request) -> Result<Response, Error> {
     let fastly_user = fastly_client.fetch_user();
 
     match (req.get_method(), req.get_path()) {
+        (&Method::GET, "/") => {
+            let params: GenerateParams = req.get_query().unwrap();
+
+            let resp = Response::from_status(StatusCode::OK)
+            .with_content_type(mime::TEXT_HTML_UTF_8)
+            .with_body(pages.render_index_page(IndexContext {
+                button_nwo: params.repository
+            }));
+
+            Ok(resp)
+        },
+
         (&Method::POST, "/fork") => {
             // Parse the form params to get repository
             let params: ActionParams = req.take_body_form().unwrap();
@@ -284,6 +296,11 @@ fn main(mut req: Request) -> Result<Response, Error> {
         _ => Ok(Response::from_status(StatusCode::NOT_FOUND)
             .with_body_str("The page you requested could not be found\n")),
     }
+}
+
+#[derive(Deserialize)]
+struct GenerateParams {
+    repository: Option<String>
 }
 
 #[derive(Deserialize)]

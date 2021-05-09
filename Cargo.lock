@@ -54,17 +54,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compute-starter-kit-rust-default"
-version = "0.1.0"
-dependencies = [
- "base64",
- "fastly",
- "serde",
- "tinytemplate",
- "toml",
-]
-
-[[package]]
 name = "fastly"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -221,6 +210,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a152013215dca273577e18d2bf00fa862b89b24169fb78c4c95aeb07992c9cec"
 dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "quick-deploy"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "fastly",
+ "serde",
+ "tinytemplate",
+ "toml",
 ]
 
 [[package]]

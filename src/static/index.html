@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Quick Deploy Demo</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link href="https://fonts.googleapis.com/css?family=Inter" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+  <div class="content">
+    <h1>Make your Compute@Edge solutions deployable in one click</h1>
+    <p>deploy.edgecompute.app provisions GitHub repositories and Fastly services to make solutions easy to share.</p>
+
+    <br/><br/>
+
+    <h2>Generate a "Click to Deploy" link for your project</h2>
+    <p>Ensure your repository has a valid <kbd>fastly.toml</kbd> and GitHub Actions workflow set up to deploy on push. The <kbd>FASTLY_API_TOKEN</kbd> environment variable will be available within workflows.</p>
+
+    <br/>
+
+    {{ if not button_nwo }}
+      <form action="/" method="get">
+        <label for="repository">GitHub Repository:</label><br/>
+        <input type="text" name="repository" id="repository" placeholder="enviark/weather" /><br/>
+        <input type="submit" value="Generate">
+      </form>
+    {{ else }}
+      <p>Add this to your <kbd>README.md</kbd>:</p>
+      <code>
+        * [Deploy this to Compute@Edge](https://deploy.edgecompute.app/{ button_nwo })
+      </code>
+    {{ endif }}
+
+    <br/><br/>
+
+    <h2>Configuration</h2>
+
+    <p>You can provide a <kbd>quick-deploy.toml</kbd> file within your repository to define dependencies (backends and dictionaries) that are required for your project to function.</p>
+
+    <code>
+      manifest_version = 1<br/>
+      <br/>
+      [[backend]]<br/>
+      name = "api.openweathermap.org"<br/>
+      host = "api.openweathermap.org"<br/>
+      port = 443<br/>
+      <br/>
+      [[dictionary]]<br/>
+      name = "weather_auth"<br/>
+      <br/>
+      [[dictionary.key]]<br/>
+      key = "key"<br/>
+      type = "string"<br/>
+      comment = "API token for openweathermap.org"
+    </code>
+  </div>
+</body>
+
+</html>

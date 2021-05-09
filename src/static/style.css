@@ -13,10 +13,9 @@ body {
 }
 
 .content h2 {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   margin-top: 8px;
   color: #2D3741;
-  font-weight: lighter;
 }
 
 .repo {
@@ -89,7 +88,7 @@ body {
   margin-right: 4px;
 }
 
-h1, h2, p, code {
+h1, h2, h3, p, code {
   color: #182931;
   margin: 0;
   margin-bottom: 8px;
