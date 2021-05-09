@@ -1,6 +1,7 @@
 mod github;
 mod scdn;
 mod templates;
+mod config;
 
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -9,6 +10,7 @@ use toml::Value;
 
 use github::GitHubClient;
 use scdn::FastlyClient;
+use config::DeployConfig;
 use templates::{DeployContext, ErrorContext, SuccessContext, TemplateRenderer};
 
 use fastly::http::{header, Method, StatusCode};
@@ -16,7 +18,12 @@ use fastly::{mime, Error, Request, Response};
 
 #[fastly::main]
 fn main(mut req: Request) -> Result<Response, Error> {
-    println!("Received request from {}: {} {}", req.get_client_ip_addr().unwrap(), req.get_method(), req.get_path());
+    println!(
+        "Received request from {}: {} {}",
+        req.get_client_ip_addr().unwrap(),
+        req.get_method(),
+        req.get_path()
+    );
 
     // Sets up a GitHub client with app credentials that we can use throughout the request
     let mut gh = GitHubClient::get_default();
@@ -61,8 +68,8 @@ fn main(mut req: Request) -> Result<Response, Error> {
             match gh.fork_repository(&nwo) {
                 Some(repo) => {
                     // Redirect back to deploy flow with the "Active-Fork" cookie set
-                    let resp = Response::from_status(StatusCode::FOUND)
-                        .with_header(header::LOCATION, nwo);
+                    let resp =
+                        Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, nwo);
                     Ok(set_cookie(
                         resp,
                         "Active-Fork",
@@ -100,11 +107,16 @@ fn main(mut req: Request) -> Result<Response, Error> {
             println!("Parsed manifest");
 
             // Create Fastly service
-            let service = fastly_client.create_service(&gh_user.unwrap().login).unwrap();
+            let service = fastly_client
+                .create_service(&gh_user.unwrap().login)
+                .unwrap();
             println!("Service created (ID {})", service.id);
 
             // Update service ID in manifest
-            table.insert("service_id".to_string(), Value::String(service.id.to_owned()));
+            table.insert(
+                "service_id".to_string(),
+                Value::String(service.id.to_owned()),
+            );
 
             // Generate output manifest
             let output = toml::to_string(&table).unwrap();
@@ -112,6 +124,8 @@ fn main(mut req: Request) -> Result<Response, Error> {
 
             println!("Enabling actions in forked repository");
             gh.enable_actions(&params.repository);
+
+            // Add Fastly API token as repository secret
 
             // Update manifest in GitHub repo
             gh.upsert_file(&params.repository, &manifest, &output);
@@ -123,9 +137,9 @@ fn main(mut req: Request) -> Result<Response, Error> {
                     application_url: format!("https://{}", &service.domain.unwrap()),
                     actions_url: format!("https://github.com/{}/actions", params.repository),
                     repo_nwo: params.repository,
-                    service_id: service.id
-                })))
-        },
+                    service_id: service.id,
+                })));
+        }
 
         (&Method::POST, "/auth/fastly") => {
             // Parse the form params to get the Fastly API token
@@ -137,7 +151,10 @@ fn main(mut req: Request) -> Result<Response, Error> {
             // Fetch the current user with the updated token
             match fastly_client.fetch_user() {
                 Some(user) => {
-                    println!("User authenticated via Fastly: {} (cid {})", user.name, user.customer_id);
+                    println!(
+                        "User authenticated via Fastly: {} (cid {})",
+                        user.name, user.customer_id
+                    );
                     // Redirect to deploy flow with fastly token set
                     let resp = Response::from_status(StatusCode::FOUND)
                         .with_header(header::LOCATION, return_location);
@@ -195,8 +212,8 @@ fn main(mut req: Request) -> Result<Response, Error> {
                     } else {
                         Some(parts.next().unwrap().to_string())
                     }
-                },
-                None => None
+                }
+                None => None,
             };
 
             println!("Fetching github.com/{}", src_nwo);
@@ -214,15 +231,33 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 }
             };
 
+            let can_deploy =
+                gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some();
+
+            let config = if can_deploy {
+                match gh.get_file(&src_nwo, "quick-deploy.toml") {
+                    Some(file) => {
+                        // Parse manifest TOML
+                        let config = DeployConfig::from_toml(&file.content);
+                        println!("Parsed config");
+                        Some(config)
+                    }
+                    None => None,
+                }
+            } else {
+                None
+            };
+
             let mut resp = Response::from_status(StatusCode::OK)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_deploy_page(DeployContext {
                     src: repo,
-                    can_deploy: gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some(),
+                    can_deploy,
                     can_fork: gh_user.is_some() && !dest_repository.is_some(),
                     github_user: gh_user,
                     fastly_user,
-                    dest_nwo: dest_repository
+                    dest_nwo: dest_repository,
+                    config
                 }));
 
             resp = set_cookie(resp, "Return-To", req.get_path());

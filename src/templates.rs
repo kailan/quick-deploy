@@ -1,3 +1,4 @@
+use crate::DeployConfig;
 use crate::scdn::FastlyUser;
 use crate::github::{GitHubUser, GitHubRepository};
 
@@ -16,6 +17,7 @@ pub struct DeployContext {
   pub fastly_user: Option<FastlyUser>,
   pub can_fork: bool,
   pub can_deploy: bool,
+  pub config: Option<DeployConfig>
 }
 
 #[derive(Serialize)]

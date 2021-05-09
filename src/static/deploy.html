@@ -100,6 +100,15 @@
 
         <form action="/deploy" method="post">
           <input type="hidden" name="repository" value="{ dest_nwo }" />
+          {{ if config }}
+            <br/>
+            {{ for dict in config.dictionaries }}
+              {{ for key in dict.keys }}
+                <label>{ key.comment }:</label><br/>
+                <input type="text" name="dict.{ dict.name }.{ key.key }" /><br/>
+              {{ endfor}}
+            {{ endfor }}
+          {{ endif }}
           <input type="submit" value="Deploy">
         </form>
       </div>

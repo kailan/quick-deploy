@@ -30,10 +30,10 @@ impl GitHubClient {
     }
   }
 
-  pub fn anonymous(self) -> GitHubClient {
+  pub fn anonymous(&self) -> GitHubClient {
     GitHubClient {
-      client_id: self.client_id,
-      client_secret: self.client_secret,
+      client_id: self.client_id.to_owned(),
+      client_secret: self.client_secret.to_owned(),
       user_access_token: None,
     }
   }
@@ -154,6 +154,46 @@ impl GitHubClient {
       .unwrap();
     req.send(API_BACKEND).unwrap();
   }
+
+  pub fn get_repository_public_key(&self, nwo: &str) -> PublicKeyResponse {
+    let mut req = self.github_request(Request::new(
+      Method::PUT,
+      format!(
+        "https://api.github.com/repos/{}/actions/secrets/public-key",
+        nwo
+      ),
+    ));
+    let mut resp = req.send(API_BACKEND).unwrap();
+    resp.take_body_json().unwrap()
+  }
+
+  pub fn create_secret(&self, nwo: &str, key: &str, value: &str) {
+    let mut req = self
+      .github_request(Request::new(
+        Method::PUT,
+        format!(
+          "https://api.github.com/repos/{}/actions/secrets/{}",
+          nwo, key
+        ),
+      ))
+      .with_pass(true);
+    req
+      .set_body_json(&CreateSecretRequest {
+        encrypted_value: value.to_string(),
+      })
+      .unwrap();
+    req.send(API_BACKEND).unwrap();
+  }
+}
+
+#[derive(Deserialize)]
+struct PublicKeyResponse {
+  key: String
+}
+
+#[derive(Serialize)]
+struct CreateSecretRequest {
+  encrypted_value: String,
 }
 
 #[derive(Serialize)]
