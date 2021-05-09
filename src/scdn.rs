@@ -69,6 +69,7 @@ impl FastlyClient {
       Ok(service) => service,
       Err(_) => return None,
     };
+    println!("Created service {}", service.id);
 
     // Create a domain
     let req = self
@@ -86,8 +87,9 @@ impl FastlyClient {
 
     let domain = match resp.take_body_json::<FastlyDomain>() {
       Ok(domain) => domain,
-      Err(_) => return panic!("Created service but could not create domain"),
+      Err(_) => panic!("Created service but could not create domain"),
     };
+    println!("Created domain {}", domain.name);
 
     service.domain = Some(domain.name);
 
@@ -107,7 +109,8 @@ impl FastlyClient {
         port: 80,
       })
       .unwrap();
-    let resp = req.send(API_BACKEND).unwrap();
+    req.send(API_BACKEND).unwrap();
+    println!("Created backend 127.0.0.1");
 
     Some(service)
   }
@@ -140,8 +143,8 @@ pub struct FastlyBackend {
 
 #[derive(Deserialize, Serialize)]
 pub struct FastlyUser {
-  name: String,
-  customer_id: String,
+  pub name: String,
+  pub customer_id: String,
 }
 
 #[derive(Deserialize)]

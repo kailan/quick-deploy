@@ -115,8 +115,7 @@ impl GitHubClient {
       ))
       .with_body_json(&ActionsPermissionsRequest { enabled: true })
       .unwrap();
-    let mut resp = req.send(API_BACKEND).unwrap();
-    println!("{}", resp.take_body_str());
+    req.send(API_BACKEND).unwrap();
   }
 
   pub fn get_file(&self, nwo: &str, path: &str) -> Option<GitHubFile> {
@@ -153,8 +152,7 @@ impl GitHubClient {
         sha: file.sha.to_owned(),
       })
       .unwrap();
-    let mut resp = req.send(API_BACKEND).unwrap();
-    println!("{}", resp.take_body_str());
+    req.send(API_BACKEND).unwrap();
   }
 }
 

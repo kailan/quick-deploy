@@ -99,8 +99,7 @@
         <p>The <kbd>fastly.toml</kbd> in your newly-created repository will be updated to include the new service's ID.</p>
 
         <form action="/deploy" method="post">
-          <input type="hidden" name="src" value="{ src.owner.login }/{ src.name}" />
-          <input type="hidden" name="dest" value="{ dest_nwo }" />
+          <input type="hidden" name="repository" value="{ dest_nwo }" />
           <input type="submit" value="Deploy">
         </form>
       </div>

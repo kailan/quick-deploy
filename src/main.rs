@@ -16,6 +16,8 @@ use fastly::{mime, Error, Request, Response};
 
 #[fastly::main]
 fn main(mut req: Request) -> Result<Response, Error> {
+    println!("Received request from {}: {} {}", req.get_client_ip_addr().unwrap(), req.get_method(), req.get_path());
+
     // Sets up a GitHub client with app credentials that we can use throughout the request
     let mut gh = GitHubClient::get_default();
 
@@ -29,7 +31,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
     let return_location = get_cookie(&cookies, "Return-To").unwrap_or("/".to_string());
 
     // Fetch the "Active-Fork" cookie to determine if the repo has been forked
-    let mut active_fork = get_cookie(&cookies, "Active-Fork");
+    let active_fork = get_cookie(&cookies, "Active-Fork");
 
     // Add a user access token to the GitHub client if defined
     gh.user_access_token = get_cookie(&cookies, "__Secure-GH-Token");
@@ -50,8 +52,10 @@ fn main(mut req: Request) -> Result<Response, Error> {
     match (req.get_method(), req.get_path()) {
         (&Method::POST, "/fork") => {
             // Parse the form params to get repository
-            let params: ForkParams = req.take_body_form().unwrap();
+            let params: ActionParams = req.take_body_form().unwrap();
             let nwo = &params.repository;
+
+            println!("Forking {}", nwo);
 
             // Fork the repository
             match gh.fork_repository(&nwo) {
@@ -75,12 +79,12 @@ fn main(mut req: Request) -> Result<Response, Error> {
 
         (&Method::POST, "/deploy") => {
             // Parse the form params to get the src and dest repository
-            let params: DeployParams = req.take_body_form().unwrap();
+            let params: ActionParams = req.take_body_form().unwrap();
 
-            println!("Deploying {}", params.dest);
+            println!("Deploying {}", params.repository);
 
             // Fetch fastly.toml file from repo
-            let manifest = match gh.get_file(&params.dest, "fastly.toml") {
+            let manifest = match gh.get_file(&params.repository, "fastly.toml") {
                 Some(file) => file,
                 None => return Ok(Response::from_status(StatusCode::NOT_FOUND)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
@@ -107,18 +111,18 @@ fn main(mut req: Request) -> Result<Response, Error> {
             println!("Generated updated manifest");
 
             println!("Enabling actions in forked repository");
-            gh.enable_actions(&params.dest);
+            gh.enable_actions(&params.repository);
 
             // Update manifest in GitHub repo
-            gh.upsert_file(&params.dest, &manifest, &output);
+            gh.upsert_file(&params.repository, &manifest, &output);
             println!("Manifest pushed to repository");
 
             return Ok(Response::from_status(StatusCode::NOT_IMPLEMENTED)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_success_page(SuccessContext {
                     application_url: format!("https://{}", &service.domain.unwrap()),
-                    actions_url: format!("https://github.com/{}/actions", params.dest),
-                    repo_nwo: params.dest,
+                    actions_url: format!("https://github.com/{}/actions", params.repository),
+                    repo_nwo: params.repository,
                     service_id: service.id
                 })))
         },
@@ -132,13 +136,15 @@ fn main(mut req: Request) -> Result<Response, Error> {
 
             // Fetch the current user with the updated token
             match fastly_client.fetch_user() {
-                Some(_user) => {
+                Some(user) => {
+                    println!("User authenticated via Fastly: {} (cid {})", user.name, user.customer_id);
                     // Redirect to deploy flow with fastly token set
                     let resp = Response::from_status(StatusCode::FOUND)
                         .with_header(header::LOCATION, return_location);
                     Ok(set_cookie(resp, "__Secure-Fastly-Token", &form.token))
                 }
                 None => {
+                    println!("User presented invalid Fastly token");
                     // Redirect to deploy flow with no token
                     // TODO: error handling
                     let resp = Response::from_status(StatusCode::FOUND)
@@ -161,6 +167,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 // Set the access token in the GitHub client
                 gh.user_access_token = Some(token.to_owned());
 
+                println!("User authenticated via GitHub");
                 // Return to deploy flow with gh token set
                 let resp = Response::from_status(StatusCode::FOUND)
                     .with_header(header::LOCATION, return_location);
@@ -191,6 +198,8 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 },
                 None => None
             };
+
+            println!("Fetching github.com/{}", src_nwo);
 
             // Fetch the repo using the ANONYMOUS github client, so we only fetch public repos
             // and are able to cache them.
@@ -228,14 +237,8 @@ fn main(mut req: Request) -> Result<Response, Error> {
 }
 
 #[derive(Deserialize)]
-struct ForkParams {
+struct ActionParams {
     repository: String,
-}
-
-#[derive(Deserialize)]
-struct DeployParams {
-    src: String,
-    dest: String,
 }
 
 fn set_cookie(resp: Response, key: &str, value: &str) -> Response {
