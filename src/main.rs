@@ -10,7 +10,7 @@ use toml::Value;
 
 use github::GitHubClient;
 use scdn::FastlyClient;
-use config::DeployConfig;
+use config::{DeployConfig, DeployConfigSpec};
 use templates::{DeployContext, ErrorContext, SuccessContext, TemplateRenderer};
 
 use fastly::http::{header, Method, StatusCode};
@@ -96,7 +96,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 None => return Ok(Response::from_status(StatusCode::NOT_FOUND)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_error_page(ErrorContext {
-                    message: "Unable to read manifest file from repository. Either the forked repo is not a C@E project, or your fork is not yet ready.".to_string(),
+                    message: "Unable to read Fastly manifest file from repository. Either the forked repo is not a C@E project, or your fork is not yet ready.".to_string(),
                 })))
             };
             println!("Fetched manifest");
@@ -106,9 +106,24 @@ fn main(mut req: Request) -> Result<Response, Error> {
             let table = value.as_table_mut().unwrap();
             println!("Parsed manifest");
 
+            // Fetch quick-deploy.toml file from repo
+            let config_spec = match gh.get_file(&params.repository, "quick-deploy.toml") {
+                Some(file) => {
+                    // Parse manifest TOML
+                    let config = DeployConfigSpec::from_toml(&file.content);
+                    println!("Parsed config");
+                    config
+                }
+                None => return Ok(Response::from_status(StatusCode::NOT_FOUND)
+                .with_content_type(mime::TEXT_HTML_UTF_8)
+                .with_body(pages.render_error_page(ErrorContext {
+                    message: "Unable to read quick deploy manifest file from repository. This project may not be compatible.".to_string(),
+                }))),
+            };
+
             // Create Fastly service
             let service = fastly_client
-                .create_service(&gh_user.unwrap().login)
+                .create_service(&gh_user.unwrap().login, DeployConfig { spec: config_spec })
                 .unwrap();
             println!("Service created (ID {})", service.id);
 
@@ -234,11 +249,11 @@ fn main(mut req: Request) -> Result<Response, Error> {
             let can_deploy =
                 gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some();
 
-            let config = if can_deploy {
+            let config_spec = if can_deploy {
                 match gh.get_file(&src_nwo, "quick-deploy.toml") {
                     Some(file) => {
                         // Parse manifest TOML
-                        let config = DeployConfig::from_toml(&file.content);
+                        let config = DeployConfigSpec::from_toml(&file.content);
                         println!("Parsed config");
                         Some(config)
                     }
@@ -257,7 +272,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
                     github_user: gh_user,
                     fastly_user,
                     dest_nwo: dest_repository,
-                    config
+                    config_spec
                 }));
 
             resp = set_cookie(resp, "Return-To", req.get_path());

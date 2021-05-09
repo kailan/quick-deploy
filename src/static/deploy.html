@@ -100,9 +100,9 @@
 
         <form action="/deploy" method="post">
           <input type="hidden" name="repository" value="{ dest_nwo }" />
-          {{ if config }}
+          {{ if config_spec }}
             <br/>
-            {{ for dict in config.dictionaries }}
+            {{ for dict in config_spec.dictionaries }}
               {{ for key in dict.keys }}
                 <label>{ key.comment }:</label><br/>
                 <input type="text" name="dict.{ dict.name }.{ key.key }" /><br/>

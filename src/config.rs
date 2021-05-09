@@ -1,13 +1,17 @@
 use serde::{Serialize, Deserialize};
 
-impl DeployConfig {
-  pub fn from_toml(config: &str) -> DeployConfig {
+impl DeployConfigSpec {
+  pub fn from_toml(config: &str) -> DeployConfigSpec {
     toml::from_str(config).unwrap()
   }
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct DeployConfig {
+  pub spec: DeployConfigSpec
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DeployConfigSpec {
   pub manifest_version: i32,
   #[serde(rename(deserialize = "backend"))]
   pub backends: Vec<BackendSpec>,

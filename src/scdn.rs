@@ -1,8 +1,10 @@
+use crate::config::BackendSpec;
 use fastly::{
   http::{header, Method},
   Request,
 };
 use serde::{Deserialize, Serialize};
+use crate::config::DeployConfig;
 
 const USER_AGENT: &str = "Quick Deploy (@kailan)";
 const API_BACKEND: &str = "api.fastly.com";
@@ -45,7 +47,7 @@ impl FastlyClient {
     }
   }
 
-  pub fn create_service(&self, name: &str) -> Option<FastlyService> {
+  pub fn create_service(&self, name: &str, mut deploy: DeployConfig) -> Option<FastlyService> {
     if self.token == None {
       return None;
     }
@@ -93,24 +95,35 @@ impl FastlyClient {
 
     service.domain = Some(domain.name);
 
-    // Create a backend
-    let req = self
-      .fastly_request(Request::new(
-        Method::POST,
-        format!(
-          "https://api.fastly.com/service/{}/version/1/backend",
-          service.id
-        ),
-      ))
-      .with_pass(true)
-      .with_body_json(&FastlyBackend {
+    // Create backends
+    if deploy.spec.backends.len() == 0 {
+      deploy.spec.backends.push(BackendSpec {
         name: "127.0.0.1".to_string(),
-        address: "127.0.0.1".to_string(),
-        port: 80,
-      })
-      .unwrap();
-    req.send(API_BACKEND).unwrap();
-    println!("Created backend 127.0.0.1");
+        host: "127.0.0.1".to_string(),
+        port: 80
+      });
+    }
+
+    for backend in deploy.spec.backends {
+      let req = self
+        .fastly_request(Request::new(
+          Method::POST,
+          format!(
+            "https://api.fastly.com/service/{}/version/1/backend",
+            service.id
+          ),
+        ))
+        .with_pass(true)
+        .with_body_json(&FastlyBackend {
+          name: backend.name.to_owned(),
+          address: backend.host,
+          port: backend.port
+        })
+        .unwrap();
+      let mut resp = req.send(API_BACKEND).unwrap();
+      println!("{}", resp.take_body_str());
+      println!("Created backend {}", backend.name);
+    }
 
     Some(service)
   }
