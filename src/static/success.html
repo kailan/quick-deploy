@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Quick Deploy Demo</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link href="https://fonts.googleapis.com/css?family=Inter" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+  <div class="content">
+    <h1>
+      Provisioning successful
+    </h1>
+
+    <br/>
+
+    <h2>
+      <a href="{ application_url }">{ application_url }</a>
+    </h2>
+
+    <br/>
+
+    <p>Your application is now deploying to Compute@Edge. For most projects, this will only take a few minutes. View the logs in <a href="{ actions_url }">GitHub Actions</a>. Your Fastly service ID is <a href="https://manage.fastly.com/configure/services/{ service_id }"><kbd>{ service_id }</kbd></a>.</kbd></p>
+
+    <h2>Get started</h2>
+
+    <p>Clone the repository and edit on your computer:</p>
+
+    <code>
+      $ git clone git@github.com:{ repo.owner.login }/{ repo.name }<br/>
+      $ cd { repo.name }
+    </code>
+
+    <p>Push changes and they will be deployed automatically. Use the GitHub Actions link above to view the logs.</p>
+  </div>
+</body>
+
+</html>

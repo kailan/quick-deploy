@@ -60,7 +60,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
                     Ok(set_cookie(
                         resp,
                         "Active-Fork",
-                        &format!("{}-{}/{}", params.repository, repo.owner.login, repo.name),
+                        &format!("{}+{}/{}", params.repository, repo.owner.login, repo.name),
                     ))
                 }
                 None => Ok(Response::from_status(StatusCode::NOT_FOUND)
@@ -152,7 +152,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
 
             let dest_repository: Option<String> = match active_fork {
                 Some(state) => {
-                    let mut parts = state.split("-");
+                    let mut parts = state.split("+");
                     if parts.next().unwrap() != src_nwo {
                         None
                     } else {
@@ -180,7 +180,7 @@ fn main(mut req: Request) -> Result<Response, Error> {
                 .with_body(pages.render_deploy_page(DeployContext {
                     src: repo,
                     can_deploy: gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some(),
-                    can_fork: gh_user.is_some(),
+                    can_fork: gh_user.is_some() && !dest_repository.is_some(),
                     github_user: gh_user,
                     fastly_user,
                     dest_nwo: dest_repository
