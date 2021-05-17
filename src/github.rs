@@ -3,6 +3,7 @@ use fastly::{
   Dictionary, Request,
 };
 use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, bail, Result};
 
 const AUTH_BACKEND: &str = "github.com";
 const API_BACKEND: &str = "api.github.com";
@@ -16,18 +17,18 @@ pub struct GitHubClient {
 }
 
 impl GitHubClient {
-  pub fn get_default() -> GitHubClient {
+  pub fn get_default() -> Result<GitHubClient> {
     GitHubClient::from_dictionary("github_auth")
   }
 
-  pub fn from_dictionary(dictionary_name: &str) -> GitHubClient {
+  pub fn from_dictionary(dictionary_name: &str) -> Result<GitHubClient> {
     let dictionary = Dictionary::open(dictionary_name);
 
-    GitHubClient {
+    Ok(GitHubClient {
       client_id: dictionary.get("client_id").unwrap(),
       client_secret: dictionary.get("client_secret").unwrap(),
       user_access_token: None,
-    }
+    })
   }
 
   pub fn anonymous(&self) -> GitHubClient {
@@ -70,7 +71,7 @@ impl GitHubClient {
     token.access_token
   }
 
-  pub fn fetch_user(&self) -> Option<GitHubUser> {
+  pub fn fetch_user(&self) -> Option<Result<GitHubUser>> {
     if self.user_access_token == None {
       return None;
     }
@@ -78,32 +79,38 @@ impl GitHubClient {
     let req = self.github_request(Request::new(Method::GET, "https://api.github.com/user"));
     let mut resp = req.send(API_BACKEND).unwrap();
     match resp.take_body_json::<GitHubUser>() {
-      Ok(user) => Some(user),
-      Err(_) => None,
+      Ok(user) => Some(Ok(user)),
+      Err(err) => Some(Err(anyhow!("Unable to fetch logged in user from GitHub: {}", err))),
     }
   }
 
-  pub fn fetch_repository(&self, nwo: &str) -> Option<GitHubRepository> {
+  pub fn fetch_repository(&self, nwo: &str) -> Option<Result<GitHubRepository>> {
     let req = self.github_request(Request::new(
       Method::GET,
       format!("https://api.github.com/repos/{}", nwo),
     ));
     let mut resp = req.send(API_BACKEND).unwrap();
-    match resp.take_body_json::<GitHubRepository>() {
-      Ok(repo) => Some(repo),
-      Err(_) => None,
+
+    match resp.get_status() {
+      StatusCode::OK => {
+        Some(Ok(resp.take_body_json().unwrap()))
+      },
+
+      StatusCode::NOT_FOUND => None,
+
+      _ => Some(Err(anyhow!("Unable to fetch GitHub repository {}: {}", nwo, resp.take_body_str()))),
     }
   }
 
-  pub fn fork_repository(&self, nwo: &str) -> Option<GitHubRepository> {
+  pub fn fork_repository(&self, nwo: &str) -> Result<GitHubRepository> {
     let req = self.github_request(Request::new(
       Method::POST,
       format!("https://api.github.com/repos/{}/forks", nwo),
     ));
     let mut resp = req.send(API_BACKEND).unwrap();
     match resp.take_body_json::<GitHubRepository>() {
-      Ok(repo) => Some(repo),
-      Err(_) => None,
+      Ok(repo) => Ok(repo),
+      Err(err) => bail!("Unable to fork GitHub repository {}: {}", nwo, err),
     }
   }
 
@@ -111,14 +118,12 @@ impl GitHubClient {
     let req = self
       .github_request(Request::new(
         Method::PUT,
-        format!("https://api.github.com/repos/{}/actions/permissions", nwo),
-      ))
-      .with_body_json(&ActionsPermissionsRequest { enabled: true })
-      .unwrap();
+        format!("https://api.github.com/repos/{}/actions/workflows/deploy/enable", nwo),
+      ).with_pass(true));
     req.send(API_BACKEND).unwrap();
   }
 
-  pub fn get_file(&self, nwo: &str, path: &str) -> Option<GitHubFile> {
+  pub fn get_file(&self, nwo: &str, path: &str) -> Option<Result<GitHubFile>> {
     let req = self.github_request(Request::new(
       Method::GET,
       format!("https://api.github.com/repos/{}/contents/{}", nwo, path),
@@ -129,9 +134,12 @@ impl GitHubClient {
         let mut file: GitHubFile = resp.take_body_json().unwrap();
         file.content =
           String::from_utf8(base64::decode(file.content.replace('\n', "")).unwrap()).unwrap();
-        Some(file)
-      }
-      _ => None,
+        Some(Ok(file))
+      },
+
+      StatusCode::NOT_FOUND => None,
+
+      _ => Some(Err(anyhow!("Unable to fetch {} file from GitHub repository {}: {}", path, nwo, resp.take_body_str()))),
     }
   }
 
@@ -156,7 +164,7 @@ impl GitHubClient {
   }
 
   pub fn get_repository_public_key(&self, nwo: &str) -> PublicKeyResponse {
-    let mut req = self.github_request(Request::new(
+    let req = self.github_request(Request::new(
       Method::PUT,
       format!(
         "https://api.github.com/repos/{}/actions/secrets/public-key",
@@ -194,11 +202,6 @@ struct PublicKeyResponse {
 #[derive(Serialize)]
 struct CreateSecretRequest {
   encrypted_value: String,
-}
-
-#[derive(Serialize)]
-struct ActionsPermissionsRequest {
-  enabled: bool,
 }
 
 #[derive(Serialize)]

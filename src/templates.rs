@@ -50,19 +50,19 @@ impl TemplateRenderer<'_> {
     TemplateRenderer { tt }
   }
 
-  pub fn render_index_page(&mut self, ctx: IndexContext) -> String {
+  pub fn render_index_page(&self, ctx: IndexContext) -> String {
     self.tt.render("index", &ctx).unwrap()
   }
 
-  pub fn render_deploy_page(&mut self, ctx: DeployContext) -> String {
+  pub fn render_deploy_page(&self, ctx: DeployContext) -> String {
     self.tt.render("deploy", &ctx).unwrap()
   }
 
-  pub fn render_error_page(&mut self, ctx: ErrorContext) -> String {
+  pub fn render_error_page(&self, ctx: ErrorContext) -> String {
     self.tt.render("error", &ctx).unwrap()
   }
 
-  pub fn render_success_page(&mut self, ctx: SuccessContext) -> String {
+  pub fn render_success_page(&self, ctx: SuccessContext) -> String {
     self.tt.render("success", &ctx).unwrap()
   }
 }
