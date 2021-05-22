@@ -1,4 +1,4 @@
-use crate::github::{GitHubRepository, GitHubUser};
+use crate::github::{GitHubRepository, GitHubUser, GitHubNWO};
 use crate::scdn::FastlyUser;
 use crate::DeployConfigSpec;
 
@@ -12,7 +12,7 @@ pub struct TemplateRenderer<'a> {
 #[derive(Serialize)]
 pub struct DeployContext {
   pub src: GitHubRepository,
-  pub dest_nwo: Option<String>,
+  pub dest_nwo: Option<GitHubNWO>,
   pub github_user: Option<GitHubUser>,
   pub fastly_user: Option<FastlyUser>,
   pub can_fork: bool,
@@ -29,13 +29,14 @@ pub struct ErrorContext {
 pub struct SuccessContext {
   pub application_url: String,
   pub actions_url: String,
-  pub repo_nwo: String,
+  pub repo_nwo: GitHubNWO,
   pub service_id: String,
 }
 
 #[derive(Serialize)]
 pub struct IndexContext {
   pub button_nwo: Option<String>,
+  pub previous_deployment: Option<GitHubNWO>
 }
 
 impl TemplateRenderer<'_> {

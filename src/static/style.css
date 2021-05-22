@@ -12,6 +12,30 @@ h2 {
   font-size: 1.2rem;
 }
 
+.resume {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 16px;
+  padding: 16px;
+  background-color: #F8F9FA;
+  border-radius: 6px;
+  border: 2px #1c1c1c solid;
+
+  transform: translateY(-20px);
+  opacity: 0;
+  animation: slidein 0.8s;
+  animation-fill-mode: forwards;
+}
+
+.resume h3 {
+  font-weight: normal;
+}
+
+.resume p {
+  margin: 0;
+}
+
 .content {
   display: flex;
   flex-direction: column;

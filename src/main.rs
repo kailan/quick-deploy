@@ -37,7 +37,17 @@ struct LoginState {
 struct DeploymentState {
     pub src: Option<GitHubNWO>,
     pub dest: Option<GitHubNWO>,
-    pub fastly_service_id: Option<GitHubNWO>
+    pub fastly_service_id: Option<String>
+}
+
+impl DeploymentState {
+    fn empty() -> DeploymentState {
+        DeploymentState {
+            src: None,
+            dest: None,
+            fastly_service_id: None
+        }
+    }
 }
 
 #[fastly::main]
@@ -52,6 +62,23 @@ fn main(req: Request) -> Result<Response, Error> {
     // Initializes the template renderer
     let pages = TemplateRenderer::new();
 
+    // Fetches the cookie header and parses it into a map
+    let cookies = get_cookies(&req);
+
+    // Parse state cookie
+    let state: ApplicationState = match get_cookie(&cookies, STATE_COOKIE) {
+        Some(state_cookie) => {
+            serde_json::from_str(&String::from_utf8(base64::decode(state_cookie).unwrap()).unwrap()).unwrap()
+        },
+        None => ApplicationState {
+            login: LoginState {
+                fastly_token: None,
+                github_token: None
+            },
+            deploy: DeploymentState::empty()
+        }
+    };
+
     match (req.get_method(), req.get_path()) {
         (&Method::GET, "/") => {
             let params: GenerateParams = req.get_query()?;
@@ -60,6 +87,7 @@ fn main(req: Request) -> Result<Response, Error> {
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_index_page(IndexContext {
                     button_nwo: params.repository,
+                    previous_deployment: state.deploy.src
                 }));
 
             return Ok(resp);
@@ -78,7 +106,7 @@ fn main(req: Request) -> Result<Response, Error> {
         _ => {}
     }
 
-    match handle_action(req, &pages) {
+    match handle_action(req, state, &pages) {
         Ok(resp) => Ok(resp),
         Err(err) => {
             return Ok(Response::from_status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -90,30 +118,9 @@ fn main(req: Request) -> Result<Response, Error> {
     }
 }
 
-fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response, Error> {
+fn handle_action(mut req: Request, mut state: ApplicationState, pages: &TemplateRenderer) -> Result<Response, Error> {
     // Sets up a GitHub client with app credentials that we can use throughout the request
     let mut gh = GitHubClient::get_default()?;
-
-    // Fetches the cookie header and parses it into a map
-    let cookies = get_cookies(&req);
-
-    // Parse state cookie
-    let mut state: ApplicationState = match get_cookie(&cookies, STATE_COOKIE) {
-        Some(state_cookie) => {
-            serde_json::from_str(&String::from_utf8(base64::decode(state_cookie).unwrap()).unwrap()).unwrap()
-        },
-        None => ApplicationState {
-            login: LoginState {
-                fastly_token: None,
-                github_token: None
-            },
-            deploy: DeploymentState {
-                src: None,
-                dest: None,
-                fastly_service_id: None
-            }
-        }
-    };
 
     // Add a user access token to the GitHub client if defined
     gh.user_access_token = match state.login.github_token.as_ref() {
@@ -134,18 +141,6 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
     let fastly_user = fastly_client.fetch_user()?;
 
     match (req.get_method(), req.get_path()) {
-        (&Method::GET, "/") => {
-            let params: GenerateParams = req.get_query()?;
-
-            let resp = Response::from_status(StatusCode::OK)
-                .with_content_type(mime::TEXT_HTML_UTF_8)
-                .with_body(pages.render_index_page(IndexContext {
-                    button_nwo: params.repository,
-                }));
-
-            Ok(resp)
-        }
-
         (&Method::POST, "/fork") => {
             // Parse the form params to get repository
             let params: ActionParams = req.take_body_form()?;
@@ -215,14 +210,19 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             gh.upsert_file(&params.repository, &manifest_file, &output)?;
             println!("Manifest pushed to repository");
 
-            return Ok(Response::from_status(StatusCode::NOT_IMPLEMENTED)
-                .with_content_type(mime::TEXT_HTML_UTF_8)
-                .with_body(pages.render_success_page(SuccessContext {
-                    application_url: format!("https://{}", &service.domain.unwrap()),
-                    actions_url: format!("https://github.com/{}/actions", params.repository),
-                    repo_nwo: params.repository,
-                    service_id: service.id,
-                })));
+            let resp = Response::from_status(StatusCode::NOT_IMPLEMENTED)
+            .with_content_type(mime::TEXT_HTML_UTF_8)
+            .with_body(pages.render_success_page(SuccessContext {
+                application_url: format!("https://{}", &service.domain.unwrap()),
+                actions_url: format!("https://github.com/{}/actions", params.repository),
+                repo_nwo: params.repository,
+                service_id: service.id,
+            }));
+
+            // Reset deployment state so we don't put the user back into the flow
+            state.deploy = DeploymentState::empty();
+
+            return Ok(update_state(resp, &state));
         }
 
         (&Method::POST, "/auth/fastly") => {
@@ -276,11 +276,6 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             Err(_) => Ok(Response::from_status(StatusCode::BAD_REQUEST)
                 .with_body_str("No auth 'code' param provided\n")),
         },
-
-        (&Method::GET, "/style.css") => {
-            Ok(Response::from_body(include_str!("static/style.css"))
-                .with_content_type(mime::TEXT_CSS))
-        }
 
         // Serve deploy page on repository routes, e.g. "/abc/def"
         (&Method::GET, _) if req.get_path().matches("/").count() == 2 => {
