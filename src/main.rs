@@ -151,7 +151,7 @@ fn handle_action(
         (&Method::POST, "/fork") => {
             // Parse the form params to get repository
             let params: ActionParams = req.take_body_form()?;
-            let nwo = &params.repository;
+            let nwo = &params["repository"];
 
             println!("Forking {}", nwo);
 
@@ -164,7 +164,7 @@ fn handle_action(
 
                     state.deploy.dest = Some(format!(
                         "{}+{}/{}",
-                        params.repository, repo.owner.login, repo.name
+                        nwo, repo.owner.login, repo.name
                     ));
                     Ok(update_state(resp, &state))
                 }
@@ -185,10 +185,12 @@ fn handle_action(
             // Parse the form params to get the src and dest repository
             let params: ActionParams = req.take_body_form()?;
 
-            println!("Deploying {}", params.repository);
+            let nwo = params["repository"].to_string();
+
+            println!("Deploying {}", nwo);
 
             // Fetch fastly.toml file from repo
-            let manifest_file = match gh.get_file(&params.repository, "fastly.toml")? {
+            let manifest_file = match gh.get_file(&nwo, "fastly.toml")? {
                 Some(file) => file,
                 None => bail!("The source repository does not contain a fastly.toml file, so cannot be deployed via Quick Deploy")
             };
@@ -204,7 +206,7 @@ fn handle_action(
 
             // Create Fastly service
             let service = fastly_client
-                .create_service(&gh_user.unwrap().login, DeployConfig { spec: config_spec })?;
+                .create_service(&gh_user.unwrap().login, DeployConfig { spec: config_spec, params })?;
             println!("Service created (ID {})", service.id);
 
             // Update service ID in manifest
@@ -215,26 +217,26 @@ fn handle_action(
             println!("Generated updated manifest");
 
             println!("Enabling actions in forked repository");
-            gh.enable_actions(&params.repository)?;
+            gh.enable_actions(&nwo)?;
 
             // Add Fastly API token as repository secret
             println!("Creating FASTLY_API_TOKEN repository secret");
             gh.create_secret(
-                &params.repository,
+                &nwo,
                 "FASTLY_API_TOKEN",
                 &fastly_client.token.as_ref().unwrap(),
             )?;
 
             // Update manifest in GitHub repo
-            gh.upsert_file(&params.repository, &manifest_file, &output)?;
+            gh.upsert_file(&nwo, &manifest_file, &output)?;
             println!("Manifest pushed to repository");
 
             let resp = Response::from_status(StatusCode::NOT_IMPLEMENTED)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_success_page(SuccessContext {
                     application_url: format!("https://{}", &service.domain.unwrap()),
-                    actions_url: format!("https://github.com/{}/actions", params.repository),
-                    repo_nwo: params.repository,
+                    actions_url: format!("https://github.com/{}/actions", nwo),
+                    repo_nwo: nwo,
                     service_id: service.id,
                 }));
 
@@ -326,9 +328,13 @@ fn handle_action(
                 gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some();
 
             // Fetch manifest file from repo
-            let config_spec = match gh.get_file(&src_nwo, "fastly.toml")? {
-                Some(file) => Some(DeployConfigSpec::from_toml(&file.content)?),
-                None => bail!("The repository does not contain a fastly.toml file."),
+            let config_spec = if can_deploy {
+                match gh.anonymous().get_file(&src_nwo, "fastly.toml")? {
+                    Some(file) => Some(DeployConfigSpec::from_toml(&file.content)?),
+                    None => bail!("The repository does not contain a fastly.toml file."),
+                }
+            } else {
+                None
             };
 
             let resp = Response::from_status(StatusCode::OK)
@@ -359,10 +365,7 @@ struct GenerateParams {
     repository: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct ActionParams {
-    repository: String,
-}
+type ActionParams = HashMap<String, String>;
 
 fn get_return_url(state: &ApplicationState) -> String {
     format!("/{}", state.deploy.src.as_ref().unwrap_or(&"".to_string()))

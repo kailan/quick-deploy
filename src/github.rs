@@ -91,7 +91,7 @@ impl GitHubClient {
     let req = self.github_request(Request::new(
       Method::GET,
       format!("https://api.github.com/repos/{}", nwo),
-    ));
+    )).with_ttl(60 * 60 * 3); // The only data used from here is star + fork count so we can cache for a while
     let mut resp = req.send(API_BACKEND)?;
 
     match resp.get_status() {

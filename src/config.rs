@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use crate::ActionParams;
 
 impl DeployConfigSpec {
   pub fn from_toml(manifest: &str) -> Result<DeployConfigSpec> {
@@ -18,6 +19,7 @@ pub struct Manifest {
 
 pub struct DeployConfig {
   pub spec: DeployConfigSpec,
+  pub params: ActionParams
 }
 
 #[derive(Serialize, Deserialize)]

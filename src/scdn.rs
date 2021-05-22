@@ -101,7 +101,7 @@ impl FastlyClient {
         name: "127.0.0.1".to_string(),
         host: "127.0.0.1".to_string(),
         port: None,
-        prompt: None
+        prompt: None,
       });
     }
 
@@ -123,9 +123,71 @@ impl FastlyClient {
         Ok(req) => req,
         Err(err) => bail!("Error while creating backend {}: {}", backend.name, err),
       };
-      let mut resp = req.send(API_BACKEND)?;
-      println!("{}", resp.take_body_str());
+      req.send(API_BACKEND)?;
       println!("Created backend {}", backend.name);
+    }
+
+    for dict in deploy.spec.dictionaries {
+      // Create dictionary
+      let req = match self
+        .fastly_request(Request::new(
+          Method::POST,
+          format!(
+            "https://api.fastly.com/service/{}/version/1/dictionary",
+            service.id
+          ),
+        ))
+        .with_pass(true)
+        .with_body_json(&FastlyDictionary {
+          id: None,
+          name: dict.name.to_owned(),
+        }) {
+        Ok(req) => req,
+        Err(err) => bail!("Error while creating dictionary {}: {}", dict.name, err),
+      };
+      let mut resp = req.send(API_BACKEND)?;
+      let created_dict: FastlyDictionary = resp.take_body_json()?;
+      println!("Created dictionary {}", dict.name);
+
+      let mut entries: Vec<FastlyDictionaryItemAction> = vec![];
+      for entry in dict.items {
+        entries.push(FastlyDictionaryItemAction {
+          op: "create".to_string(),
+          item_key: entry.key.to_owned(),
+          item_value: match deploy.params.get(&format!("dict.{}.{}", dict.name, entry.key)) {
+            Some(value) => value.to_string(),
+            None => match entry.value {
+              Some(default) => default,
+              None => bail!("No value provided for dict key {}", entry.key)
+            }
+          },
+        });
+      }
+
+      let entry_count = entries.len();
+
+      match self
+        .fastly_request(Request::new(
+          Method::PATCH,
+          format!(
+            "https://api.fastly.com/service/{}/dictionary/{}/items",
+            service.id,
+            created_dict.id.unwrap()
+          ),
+        ))
+        .with_pass(true)
+        .with_body_json(&FastlyDictionaryUpdateRequest { items: entries })?
+        .send(API_BACKEND)
+      {
+        Ok(mut resp) => {
+          println!("Populated dictionary {} with {} items", dict.name, entry_count);
+        },
+        Err(err) => bail!(
+          "Error while adding items to dictionary {}: {}",
+          dict.name,
+          err
+        ),
+      };
     }
 
     Ok(service)
@@ -148,6 +210,24 @@ pub struct FastlyService {
 #[derive(Serialize, Deserialize)]
 pub struct FastlyDomain {
   pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FastlyDictionary {
+  pub id: Option<String>,
+  pub name: String,
+}
+
+#[derive(Serialize)]
+pub struct FastlyDictionaryUpdateRequest {
+  pub items: Vec<FastlyDictionaryItemAction>,
+}
+
+#[derive(Serialize)]
+pub struct FastlyDictionaryItemAction {
+  pub op: String,
+  pub item_key: String,
+  pub item_value: String,
 }
 
 #[derive(Serialize)]
