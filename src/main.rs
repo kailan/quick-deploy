@@ -5,30 +5,40 @@ mod templates;
 
 use anyhow::bail;
 
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
-use toml::Value;
+use toml_edit::{Document, value};
 
 use config::{DeployConfig, DeployConfigSpec};
-use github::GitHubClient;
+use github::{GitHubClient, GitHubNWO};
 use scdn::FastlyClient;
 use templates::{DeployContext, ErrorContext, IndexContext, SuccessContext, TemplateRenderer};
 
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
 
-/// Stores the user's Fastly API token
-const FASTLY_TOKEN_COOKIE: &str = "__Secure-FSLY-Token";
+/// Stores the user's application state
+const STATE_COOKIE: &str = "__Secure-Deploy-Config";
 
-/// Stores the user's GitHub API token
-const GITHUB_TOKEN_COOKIE: &str = "__Secure-GH-Token";
+#[derive(Serialize, Deserialize)]
+struct ApplicationState {
+    pub login: LoginState,
+    pub deploy: DeploymentState
+}
 
-/// Stores the nwo of the repo currently being deployed
-const USER_LOCATION_COOKIE: &str = "Return-To";
+#[derive(Serialize, Deserialize)]
+struct LoginState {
+    pub fastly_token: Option<String>,
+    pub github_token: Option<String>
+}
 
-/// Stores the nwo of the currently active fork and its origin nwo
-const ACTIVE_FORK_COOKIE: &str = "Active-Fork";
+#[derive(Serialize, Deserialize)]
+struct DeploymentState {
+    pub src: Option<GitHubNWO>,
+    pub dest: Option<GitHubNWO>,
+    pub fastly_service_id: Option<GitHubNWO>
+}
 
 #[fastly::main]
 fn main(req: Request) -> Result<Response, Error> {
@@ -82,23 +92,37 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
     // Fetches the cookie header and parses it into a map
     let cookies = get_cookies(&req);
 
-    // Fetch the "Return-To" cookie to determine where to send the user after auth
-    let return_location = get_cookie(&cookies, USER_LOCATION_COOKIE).unwrap_or("/".to_string());
-
-    // Fetch the "Active-Fork" cookie to determine if the repo has been forked
-    let active_fork = get_cookie(&cookies, ACTIVE_FORK_COOKIE);
+    // Parse state cookie
+    let mut state: ApplicationState = match get_cookie(&cookies, STATE_COOKIE) {
+        Some(state_cookie) => {
+            serde_json::from_str(&String::from_utf8(base64::decode(state_cookie).unwrap()).unwrap()).unwrap()
+        },
+        None => ApplicationState {
+            login: LoginState {
+                fastly_token: None,
+                github_token: None
+            },
+            deploy: DeploymentState {
+                src: None,
+                dest: None,
+                fastly_service_id: None
+            }
+        }
+    };
 
     // Add a user access token to the GitHub client if defined
-    gh.user_access_token = get_cookie(&cookies, GITHUB_TOKEN_COOKIE);
+    gh.user_access_token = match state.login.github_token.as_ref() {
+        Some(token) => Some(token.to_string()),
+        None => None
+    };
 
     // Fetch the currently active GitHub user, if authenticated
     let gh_user = gh.fetch_user()?;
 
-    // Fetch the value of the Fastly auth token and initialize a new API client
-    let mut fastly_client = if let Some(token) = get_cookie(&cookies, FASTLY_TOKEN_COOKIE) {
-        FastlyClient::from_token(token)
-    } else {
-        FastlyClient::new()
+    // Add a user access token to the Fastly client if defined
+    let mut fastly_client = match state.login.fastly_token.as_ref() {
+        Some(token) => FastlyClient::from_token(token.to_string()),
+        None => FastlyClient::new()
     };
 
     // Fetch the currently active Fastly user, if authenticated
@@ -129,12 +153,10 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
                 Ok(repo) => {
                     // Redirect back to deploy flow with the "Active-Fork" cookie set
                     let resp =
-                        Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, nwo);
-                    Ok(set_cookie(
-                        resp,
-                        "Active-Fork",
-                        &format!("{}+{}/{}", params.repository, repo.owner.login, repo.name),
-                    ))
+                        Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, format!("/{}", nwo));
+
+                    state.deploy.dest = Some(format!("{}+{}/{}", params.repository, repo.owner.login, repo.name));
+                    Ok(update_state(resp, &state))
                 }
                 Err(err) => bail!("Unable to fork repository: {}", err),
             }
@@ -147,7 +169,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             println!("Deploying {}", params.repository);
 
             // Fetch fastly.toml file from repo
-            let manifest = match gh.get_file(&params.repository, "fastly.toml")? {
+            let manifest_file = match gh.get_file(&params.repository, "fastly.toml")? {
                 Some(file) => file,
                 None => bail!("The source repository does not contain a fastly.toml file, so cannot be deployed via Quick Deploy")
             };
@@ -155,8 +177,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             println!("Fetched manifest");
 
             // Parse manifest TOML
-            let mut value = manifest.content.parse::<Value>()?;
-            let table = value.as_table_mut().unwrap();
+            let mut manifest = manifest_file.content.parse::<Document>()?;
             println!("Parsed manifest");
 
             // Fetch quick-deploy.toml file from repo
@@ -172,13 +193,10 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             println!("Service created (ID {})", service.id);
 
             // Update service ID in manifest
-            table.insert(
-                "service_id".to_string(),
-                Value::String(service.id.to_owned()),
-            );
+            manifest["service_id"] = value(service.id.to_owned());
 
             // Generate output manifest
-            let output = toml::to_string(&table)?;
+            let output = manifest.to_string();
             println!("Generated updated manifest");
 
             println!("Enabling actions in forked repository");
@@ -189,11 +207,11 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             gh.create_secret(
                 &params.repository,
                 "FASTLY_API_TOKEN",
-                &fastly_client.token.unwrap(),
+                &fastly_client.token.as_ref().unwrap(),
             )?;
 
             // Update manifest in GitHub repo
-            gh.upsert_file(&params.repository, &manifest, &output)?;
+            gh.upsert_file(&params.repository, &manifest_file, &output)?;
             println!("Manifest pushed to repository");
 
             return Ok(Response::from_status(StatusCode::NOT_IMPLEMENTED)
@@ -225,8 +243,11 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             );
             // Redirect to deploy flow with fastly token set
             let resp = Response::from_status(StatusCode::FOUND)
-                .with_header(header::LOCATION, return_location);
-            Ok(set_cookie(resp, FASTLY_TOKEN_COOKIE, &form.token))
+                .with_header(header::LOCATION, get_return_url(&state));
+
+            state.login.fastly_token = fastly_client.token;
+
+            Ok(update_state(resp, &state))
         }
 
         // Redirect to GitHub authorization flow
@@ -245,8 +266,11 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
                 println!("User authenticated via GitHub");
                 // Return to deploy flow with gh token set
                 let resp = Response::from_status(StatusCode::FOUND)
-                    .with_header(header::LOCATION, return_location);
-                Ok(set_cookie(resp, GITHUB_TOKEN_COOKIE, &token))
+                    .with_header(header::LOCATION, get_return_url(&state));
+
+                state.login.github_token = Some(token);
+
+                Ok(update_state(resp, &state))
             }
             Err(_) => Ok(Response::from_status(StatusCode::BAD_REQUEST)
                 .with_body_str("No auth 'code' param provided\n")),
@@ -262,7 +286,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             let path = req.get_path();
             let src_nwo = &path[1..path.len()];
 
-            let dest_repository: Option<String> = match active_fork {
+            let dest_repository: Option<String> = match state.deploy.dest.as_ref() {
                 Some(state) => {
                     let mut parts = state.split("+");
                     if parts.next().unwrap() != src_nwo {
@@ -292,7 +316,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
                 None => None,
             };
 
-            let mut resp = Response::from_status(StatusCode::OK)
+            let resp = Response::from_status(StatusCode::OK)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_deploy_page(DeployContext {
                     src: repo,
@@ -304,9 +328,9 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
                     config_spec,
                 }));
 
-            resp = set_cookie(resp, USER_LOCATION_COOKIE, req.get_path());
+            state.deploy.src = Some(src_nwo.to_string());
 
-            Ok(resp)
+            Ok(update_state(resp, &state))
         }
 
         // Catch all other requests and return a 404.
@@ -325,10 +349,14 @@ struct ActionParams {
     repository: String,
 }
 
-fn set_cookie(resp: Response, key: &str, value: &str) -> Response {
+fn get_return_url(state: &ApplicationState) -> String {
+    format!("/{}", state.deploy.src.as_ref().unwrap_or(&"".to_string()))
+}
+
+fn update_state(resp: Response, state: &ApplicationState) -> Response {
     resp.with_header(
         header::SET_COOKIE,
-        format!("{}={}; Secure; HttpOnly; Path=/;", key, value),
+        format!("{}={}; Secure; HttpOnly; Path=/;", STATE_COOKIE, base64::encode(serde_json::to_string(state).unwrap())),
     )
 }
 

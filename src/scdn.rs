@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 const USER_AGENT: &str = "Quick Deploy (@kailan)";
 const API_BACKEND: &str = "api.fastly.com";
 
+#[derive(Serialize, Deserialize)]
 pub struct FastlyClient {
   pub token: Option<String>,
 }

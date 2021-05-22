@@ -11,6 +11,8 @@ const AUTH_BACKEND: &str = "github.com";
 const API_BACKEND: &str = "api.github.com";
 const USER_AGENT: &str = "Quick Deploy (@kailan)";
 
+pub type GitHubNWO = String;
+
 pub struct GitHubClient {
   client_id: String,
   client_secret: String,
