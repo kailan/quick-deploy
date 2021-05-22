@@ -98,9 +98,9 @@
           {{ if config_spec }}
             <br/>
             {{ for dict in config_spec.dictionaries }}
-              {{ for key in dict.keys }}
-                <label>{ key.comment }:</label><br/>
-                <input type="text" name="dict.{ dict.name }.{ key.key }" /><br/>
+              {{ for entry in dict.items }}
+                <label>{ entry.prompt }:</label><br/>
+                <input type="text" name="dict.{ dict.name }.{ entry.key }" {{ if entry.value }}{{ else }}required{{ endif }} /><br/>
               {{ endfor}}
             {{ endfor }}
           {{ endif }}

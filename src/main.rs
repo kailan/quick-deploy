@@ -68,6 +68,11 @@ fn main(req: Request) -> Result<Response, Error> {
         (&Method::GET, "/style.css") => {
             return Ok(Response::from_body(include_str!("static/style.css"))
                 .with_content_type(mime::TEXT_CSS))
+        },
+
+        (&Method::GET, "/images/background.png") => {
+            return Ok(Response::from_body(include_bytes!("static/images/background.png").to_vec())
+                .with_content_type(mime::IMAGE_PNG))
         }
 
         _ => {}
@@ -176,16 +181,12 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
 
             println!("Fetched manifest");
 
-            // Parse manifest TOML
+            // Parse manifest TOML in an editable fashion
             let mut manifest = manifest_file.content.parse::<Document>()?;
             println!("Parsed manifest");
 
-            // Fetch quick-deploy.toml file from repo
-            let config_spec = match gh.get_file(&params.repository, "quick-deploy.toml")? {
-                Some(file) => DeployConfigSpec::from_toml(&file.content),
-                None => bail!("The source repository does not contain a quick-deploy.toml file, so cannot be deployed via Quick Deploy")
-            };
-            println!("Parsed config specification");
+            // Deserialize manifest TOML to fetch setup spec
+            let config_spec = DeployConfigSpec::from_toml(&manifest_file.content)?;
 
             // Create Fastly service
             let service = fastly_client
@@ -310,10 +311,10 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             let can_deploy =
                 gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some();
 
-            // Fetch quick-deploy.toml file from repo
-            let config_spec = match gh.get_file(&src_nwo, "quick-deploy.toml")? {
-                Some(file) => Some(DeployConfigSpec::from_toml(&file.content)),
-                None => None,
+            // Fetch manifest file from repo
+            let config_spec = match gh.get_file(&src_nwo, "fastly.toml")? {
+                Some(file) => Some(DeployConfigSpec::from_toml(&file.content)?),
+                None => bail!("The repository does not contain a fastly.toml file."),
             };
 
             let resp = Response::from_status(StatusCode::OK)

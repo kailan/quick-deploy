@@ -1,9 +1,19 @@
 use serde::{Deserialize, Serialize};
+use anyhow::Result;
 
 impl DeployConfigSpec {
-  pub fn from_toml(config: &str) -> DeployConfigSpec {
-    toml::from_str(config).unwrap()
+  pub fn from_toml(manifest: &str) -> Result<DeployConfigSpec> {
+    let manifest: Manifest = toml::from_str(manifest)?;
+    Ok(manifest.setup.unwrap_or(DeployConfigSpec {
+      backends: vec![],
+      dictionaries: vec![]
+    }))
   }
+}
+
+#[derive(Deserialize)]
+pub struct Manifest {
+  pub setup: Option<DeployConfigSpec>
 }
 
 pub struct DeployConfig {
@@ -12,31 +22,28 @@ pub struct DeployConfig {
 
 #[derive(Serialize, Deserialize)]
 pub struct DeployConfigSpec {
-  pub manifest_version: i32,
-  #[serde(rename(deserialize = "backend"))]
   pub backends: Vec<BackendSpec>,
-  #[serde(rename(deserialize = "dictionary"))]
   pub dictionaries: Vec<DictionarySpec>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BackendSpec {
+  pub prompt: Option<String>,
   pub name: String,
   pub host: String,
-  pub port: i32,
+  pub port: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DictionarySpec {
   pub name: String,
-  #[serde(rename(deserialize = "key"))]
-  pub keys: Vec<DictionaryKeySpec>,
+  pub items: Vec<DictionaryItemSpec>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct DictionaryKeySpec {
+pub struct DictionaryItemSpec {
   pub key: String,
-  #[serde(rename = "type")]
   pub input_type: String,
-  pub comment: String,
+  pub prompt: Option<String>,
+  pub value: Option<String>
 }

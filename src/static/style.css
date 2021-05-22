@@ -1,5 +1,15 @@
 body {
   font-family: "Inter", sans-serif;
+  background-color: #1c1c1c;
+  background-image: url("/images/background.png");
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  font-size: 1.2rem;
 }
 
 .content {

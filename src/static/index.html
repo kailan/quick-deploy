@@ -12,9 +12,7 @@
 <body>
   <div class="content">
     <h1>Make your Compute@Edge solutions deployable in one click</h1>
-    <p><strong>NOTICE: This is in development and not ready for use in public repositories.</strong></p>
-    <br/>
-    <p>deploy.edgecompute.app provisions GitHub repositories and Fastly services to make solutions easy to share.</p>
+    <p><strong>This service is in development and not yet ready for public use. Deployments are likely to fail.</strong></p>
 
     <br/><br/>
 
@@ -40,23 +38,22 @@
 
     <h2>Configuration</h2>
 
-    <p>You can provide a <kbd>quick-deploy.toml</kbd> file within your repository to define dependencies (backends and dictionaries) that are required for your project to function.</p>
+    <p>You can add a (soon to be standardised) <kbd>[setup]</kbd> section to the <kbd>fastly.toml</kbd> file within your repository to define dependencies (backends and dictionaries) that are required for your project to function.</p>
 
     <code>
-      manifest_version = 1<br/>
-      <br/>
-      [[backend]]<br/>
+      [[setup.backends]]<br/>
+      prompt = "OpenWeatherMap API Server"<br/>
       name = "api.openweathermap.org"<br/>
       host = "api.openweathermap.org"<br/>
       port = 443<br/>
       <br/>
-      [[dictionary]]<br/>
+      [[setup.dictionaries]]<br/>
       name = "weather_auth"<br/>
       <br/>
-      [[dictionary.key]]<br/>
+      [[setup.dictionaries.items]]<br/>
+      prompt = "API token for openweathermap.org"<br/>
       key = "key"<br/>
-      type = "string"<br/>
-      comment = "API token for openweathermap.org"
+      input_type = "string"
     </code>
   </div>
 </body>
