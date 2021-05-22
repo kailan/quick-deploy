@@ -7,3 +7,34 @@ language = "rust"
 manifest_version = 1
 name = "quick-deploy"
 service_id = "5HeEXMmk5UtlUJHzAnTo7M"
+
+[[setup.backends]]
+prompt = "GitHub API"
+name = "api.github.com"
+host = "api.github.com"
+port = 443
+
+[[setup.backends]]
+prompt = "GitHub Application"
+name = "github.com"
+host = "github.com"
+port = 443
+
+[[setup.backends]]
+prompt = "Fastly API"
+name = "api.fastly.com"
+host = "api.fastly.com"
+port = 443
+
+[[setup.dictionaries]]
+name = "github_auth"
+
+[[setup.dictionaries.items]]
+prompt = "GitHub Client ID"
+key = "client_id"
+input_type = "string"
+
+[[setup.dictionaries.items]]
+prompt = "GitHub Client Secret"
+key = "client_secret"
+input_type = "string"
