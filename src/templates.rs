@@ -1,12 +1,12 @@
-use crate::DeployConfigSpec;
+use crate::github::{GitHubRepository, GitHubUser};
 use crate::scdn::FastlyUser;
-use crate::github::{GitHubUser, GitHubRepository};
+use crate::DeployConfigSpec;
 
-use tinytemplate::TinyTemplate;
 use serde::Serialize;
+use tinytemplate::TinyTemplate;
 
 pub struct TemplateRenderer<'a> {
-  tt: TinyTemplate<'a>
+  tt: TinyTemplate<'a>,
 }
 
 #[derive(Serialize)]
@@ -17,12 +17,12 @@ pub struct DeployContext {
   pub fastly_user: Option<FastlyUser>,
   pub can_fork: bool,
   pub can_deploy: bool,
-  pub config_spec: Option<DeployConfigSpec>
+  pub config_spec: Option<DeployConfigSpec>,
 }
 
 #[derive(Serialize)]
 pub struct ErrorContext {
-  pub message: String
+  pub message: String,
 }
 
 #[derive(Serialize)]
@@ -30,22 +30,26 @@ pub struct SuccessContext {
   pub application_url: String,
   pub actions_url: String,
   pub repo_nwo: String,
-  pub service_id: String
+  pub service_id: String,
 }
 
 #[derive(Serialize)]
 pub struct IndexContext {
-  pub button_nwo: Option<String>
+  pub button_nwo: Option<String>,
 }
 
 impl TemplateRenderer<'_> {
   pub fn new() -> TemplateRenderer<'static> {
     let mut tt = TinyTemplate::new();
 
-    tt.add_template("index", include_str!("static/index.html")).unwrap();
-    tt.add_template("deploy", include_str!("static/deploy.html")).unwrap();
-    tt.add_template("error", include_str!("static/error.html")).unwrap();
-    tt.add_template("success", include_str!("static/success.html")).unwrap();
+    tt.add_template("index", include_str!("static/index.html"))
+      .unwrap();
+    tt.add_template("deploy", include_str!("static/deploy.html"))
+      .unwrap();
+    tt.add_template("error", include_str!("static/error.html"))
+      .unwrap();
+    tt.add_template("success", include_str!("static/success.html"))
+      .unwrap();
 
     TemplateRenderer { tt }
   }

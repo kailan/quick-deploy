@@ -1,10 +1,10 @@
+use anyhow::{bail, Result};
 use fastly::{
   http::{header, Method, StatusCode},
   Dictionary, Request,
 };
-use serde::{Deserialize, Serialize};
-use anyhow::{bail, Result};
 use sealed_box::PublicKey;
+use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 
 const AUTH_BACKEND: &str = "github.com";
@@ -93,13 +93,15 @@ impl GitHubClient {
     let mut resp = req.send(API_BACKEND)?;
 
     match resp.get_status() {
-      StatusCode::OK => {
-        Ok(Some(resp.take_body_json()?))
-      },
+      StatusCode::OK => Ok(Some(resp.take_body_json()?)),
 
       StatusCode::NOT_FOUND => Ok(None),
 
-      _ => bail!("Unable to fetch GitHub repository {}: {}", nwo, resp.take_body_str()),
+      _ => bail!(
+        "Unable to fetch GitHub repository {}: {}",
+        nwo,
+        resp.take_body_str()
+      ),
     }
   }
 
@@ -116,11 +118,16 @@ impl GitHubClient {
   }
 
   pub fn enable_actions(&self, nwo: &str) -> Result<()> {
-    let req = self
-      .github_request(Request::new(
+    let req = self.github_request(
+      Request::new(
         Method::PUT,
-        format!("https://api.github.com/repos/{}/actions/workflows/deploy/enable", nwo),
-      ).with_pass(true));
+        format!(
+          "https://api.github.com/repos/{}/actions/workflows/deploy/enable",
+          nwo
+        ),
+      )
+      .with_pass(true),
+    );
     req.send(API_BACKEND)?;
     Ok(())
   }
@@ -134,14 +141,18 @@ impl GitHubClient {
     match resp.get_status() {
       StatusCode::OK => {
         let mut file: GitHubFile = resp.take_body_json()?;
-        file.content =
-          String::from_utf8(base64::decode(file.content.replace('\n', ""))?)?;
-          Ok(Some(file))
-      },
+        file.content = String::from_utf8(base64::decode(file.content.replace('\n', ""))?)?;
+        Ok(Some(file))
+      }
 
       StatusCode::NOT_FOUND => Ok(None),
 
-      _ => bail!("Unable to fetch {} file from GitHub repository {}: {}", path, nwo, resp.take_body_str()),
+      _ => bail!(
+        "Unable to fetch {} file from GitHub repository {}: {}",
+        path,
+        nwo,
+        resp.take_body_str()
+      ),
     }
   }
 
@@ -155,19 +166,18 @@ impl GitHubClient {
         ),
       ))
       .with_pass(true);
-    req
-      .set_body_json(&FileUpdateRequest {
-        content: base64::encode(content),
-        message: "Service provisioning via deploy.edgecompute.app".to_string(),
-        sha: file.sha.to_owned(),
-      })?;
+    req.set_body_json(&FileUpdateRequest {
+      content: base64::encode(content),
+      message: "Service provisioning via deploy.edgecompute.app".to_string(),
+      sha: file.sha.to_owned(),
+    })?;
     req.send(API_BACKEND)?;
     Ok(())
   }
 
   pub fn get_repository_public_key(&self, nwo: &str) -> Result<(PublicKey, String)> {
     let req = self.github_request(Request::new(
-      Method::PUT,
+      Method::GET,
       format!(
         "https://api.github.com/repos/{}/actions/secrets/public-key",
         nwo
@@ -178,8 +188,8 @@ impl GitHubClient {
       Ok(body) => {
         let key = base64::decode(body.key)?;
         Ok((key.try_into().unwrap(), body.key_id))
-      },
-      Err(err) => bail!(err)
+      }
+      Err(err) => bail!(err),
     }
   }
 
@@ -197,14 +207,18 @@ impl GitHubClient {
         ),
       ))
       .with_pass(true);
-    req
-      .set_body_json(&CreateSecretRequest {
-        key_id,
-        encrypted_value: base64::encode(encrypted_value),
-      })?;
+    req.set_body_json(&CreateSecretRequest {
+      key_id,
+      encrypted_value: base64::encode(encrypted_value),
+    })?;
     match req.send(API_BACKEND) {
-      Ok(_resp) => Ok(()),
-      Err(err) => bail!(err)
+      Ok(mut resp) => match resp.get_status() {
+        StatusCode::CREATED | StatusCode::NO_CONTENT => Ok(()),
+        _ => {
+          bail!("Unable to create secret: {}", resp.take_body_str())
+        }
+      },
+      Err(err) => bail!(err),
     }
   }
 }
@@ -212,13 +226,13 @@ impl GitHubClient {
 #[derive(Deserialize)]
 struct PublicKeyResponse {
   key: String,
-  key_id: String
+  key_id: String,
 }
 
 #[derive(Serialize)]
 struct CreateSecretRequest {
   encrypted_value: String,
-  key_id: String
+  key_id: String,
 }
 
 #[derive(Serialize)]

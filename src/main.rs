@@ -1,7 +1,7 @@
+mod config;
 mod github;
 mod scdn;
 mod templates;
-mod config;
 
 use anyhow::bail;
 
@@ -10,10 +10,10 @@ use std::collections::HashMap;
 
 use toml::Value;
 
+use config::{DeployConfig, DeployConfigSpec};
 use github::GitHubClient;
 use scdn::FastlyClient;
-use config::{DeployConfig, DeployConfigSpec};
-use templates::{IndexContext, DeployContext, ErrorContext, SuccessContext, TemplateRenderer};
+use templates::{DeployContext, ErrorContext, IndexContext, SuccessContext, TemplateRenderer};
 
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
@@ -49,18 +49,18 @@ fn main(req: Request) -> Result<Response, Error> {
             let resp = Response::from_status(StatusCode::OK)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_index_page(IndexContext {
-                    button_nwo: params.repository
+                    button_nwo: params.repository,
                 }));
 
-            return Ok(resp)
-        },
+            return Ok(resp);
+        }
 
         (&Method::GET, "/style.css") => {
             return Ok(Response::from_body(include_str!("static/style.css"))
                 .with_content_type(mime::TEXT_CSS))
         }
 
-        _ => {},
+        _ => {}
     }
 
     match handle_action(req, &pages) {
@@ -111,11 +111,11 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             let resp = Response::from_status(StatusCode::OK)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_index_page(IndexContext {
-                    button_nwo: params.repository
+                    button_nwo: params.repository,
                 }));
 
             Ok(resp)
-        },
+        }
 
         (&Method::POST, "/fork") => {
             // Parse the form params to get repository
@@ -186,7 +186,11 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
 
             // Add Fastly API token as repository secret
             println!("Creating FASTLY_API_TOKEN repository secret");
-            gh.create_secret(&params.repository, "FASTLY_API_TOKEN", &fastly_client.token.unwrap())?;
+            gh.create_secret(
+                &params.repository,
+                "FASTLY_API_TOKEN",
+                &fastly_client.token.unwrap(),
+            )?;
 
             // Update manifest in GitHub repo
             gh.upsert_file(&params.repository, &manifest, &output)?;
@@ -212,7 +216,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             // Fetch the current user with the updated token
             let user = match fastly_client.fetch_user()? {
                 Some(user) => user,
-                None => bail!("Invalid Fastly API token provided")
+                None => bail!("Invalid Fastly API token provided"),
             };
 
             println!(
@@ -276,7 +280,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             // and are able to cache them.
             let repo = match gh.anonymous().fetch_repository(src_nwo)? {
                 Some(repo) => repo,
-                None => bail!("No repository was found at github.com{}", path)
+                None => bail!("No repository was found at github.com{}", path),
             };
 
             let can_deploy =
@@ -285,7 +289,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
             // Fetch quick-deploy.toml file from repo
             let config_spec = match gh.get_file(&src_nwo, "quick-deploy.toml")? {
                 Some(file) => Some(DeployConfigSpec::from_toml(&file.content)),
-                None => None
+                None => None,
             };
 
             let mut resp = Response::from_status(StatusCode::OK)
@@ -297,7 +301,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
                     github_user: gh_user,
                     fastly_user,
                     dest_nwo: dest_repository,
-                    config_spec
+                    config_spec,
                 }));
 
             resp = set_cookie(resp, USER_LOCATION_COOKIE, req.get_path());
@@ -313,7 +317,7 @@ fn handle_action(mut req: Request, pages: &TemplateRenderer) -> Result<Response,
 
 #[derive(Deserialize)]
 struct GenerateParams {
-    repository: Option<String>
+    repository: Option<String>,
 }
 
 #[derive(Deserialize)]

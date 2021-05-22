@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 impl DeployConfigSpec {
   pub fn from_toml(config: &str) -> DeployConfigSpec {
@@ -7,7 +7,7 @@ impl DeployConfigSpec {
 }
 
 pub struct DeployConfig {
-  pub spec: DeployConfigSpec
+  pub spec: DeployConfigSpec,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -16,21 +16,21 @@ pub struct DeployConfigSpec {
   #[serde(rename(deserialize = "backend"))]
   pub backends: Vec<BackendSpec>,
   #[serde(rename(deserialize = "dictionary"))]
-  pub dictionaries: Vec<DictionarySpec>
+  pub dictionaries: Vec<DictionarySpec>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BackendSpec {
   pub name: String,
   pub host: String,
-  pub port: i32
+  pub port: i32,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DictionarySpec {
   pub name: String,
   #[serde(rename(deserialize = "key"))]
-  pub keys: Vec<DictionaryKeySpec>
+  pub keys: Vec<DictionaryKeySpec>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -38,5 +38,5 @@ pub struct DictionaryKeySpec {
   pub key: String,
   #[serde(rename = "type")]
   pub input_type: String,
-  pub comment: String
+  pub comment: String,
 }

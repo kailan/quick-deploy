@@ -1,11 +1,11 @@
 use crate::config::BackendSpec;
+use crate::config::DeployConfig;
+use anyhow::{bail, Result};
 use fastly::{
   http::{header, Method},
   Request,
 };
 use serde::{Deserialize, Serialize};
-use crate::config::DeployConfig;
-use anyhow::{Result, bail};
 
 const USER_AGENT: &str = "Quick Deploy (@kailan)";
 const API_BACKEND: &str = "api.fastly.com";
@@ -99,7 +99,7 @@ impl FastlyClient {
       deploy.spec.backends.push(BackendSpec {
         name: "127.0.0.1".to_string(),
         host: "127.0.0.1".to_string(),
-        port: 80
+        port: 80,
       });
     }
 
@@ -116,7 +116,7 @@ impl FastlyClient {
         .with_body_json(&FastlyBackend {
           name: backend.name.to_owned(),
           address: backend.host,
-          port: backend.port
+          port: backend.port,
         }) {
         Ok(req) => req,
         Err(err) => bail!("Error while creating backend {}: {}", backend.name, err),
