@@ -5,10 +5,10 @@ mod templates;
 
 use anyhow::bail;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use toml_edit::{Document, value};
+use toml_edit::{value, Document};
 
 use config::{DeployConfig, DeployConfigSpec};
 use github::{GitHubClient, GitHubNWO};
@@ -24,20 +24,20 @@ const STATE_COOKIE: &str = "__Secure-Deploy-Config";
 #[derive(Serialize, Deserialize)]
 struct ApplicationState {
     pub login: LoginState,
-    pub deploy: DeploymentState
+    pub deploy: DeploymentState,
 }
 
 #[derive(Serialize, Deserialize)]
 struct LoginState {
     pub fastly_token: Option<String>,
-    pub github_token: Option<String>
+    pub github_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct DeploymentState {
     pub src: Option<GitHubNWO>,
     pub dest: Option<GitHubNWO>,
-    pub fastly_service_id: Option<String>
+    pub fastly_service_id: Option<String>,
 }
 
 impl DeploymentState {
@@ -45,7 +45,7 @@ impl DeploymentState {
         DeploymentState {
             src: None,
             dest: None,
-            fastly_service_id: None
+            fastly_service_id: None,
         }
     }
 }
@@ -68,15 +68,16 @@ fn main(req: Request) -> Result<Response, Error> {
     // Parse state cookie
     let state: ApplicationState = match get_cookie(&cookies, STATE_COOKIE) {
         Some(state_cookie) => {
-            serde_json::from_str(&String::from_utf8(base64::decode(state_cookie).unwrap()).unwrap()).unwrap()
-        },
+            serde_json::from_str(&String::from_utf8(base64::decode(state_cookie).unwrap()).unwrap())
+                .unwrap()
+        }
         None => ApplicationState {
             login: LoginState {
                 fastly_token: None,
-                github_token: None
+                github_token: None,
             },
-            deploy: DeploymentState::empty()
-        }
+            deploy: DeploymentState::empty(),
+        },
     };
 
     match (req.get_method(), req.get_path()) {
@@ -87,7 +88,7 @@ fn main(req: Request) -> Result<Response, Error> {
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_index_page(IndexContext {
                     button_nwo: params.repository,
-                    previous_deployment: state.deploy.src
+                    previous_deployment: state.deploy.src,
                 }));
 
             return Ok(resp);
@@ -96,11 +97,13 @@ fn main(req: Request) -> Result<Response, Error> {
         (&Method::GET, "/style.css") => {
             return Ok(Response::from_body(include_str!("static/style.css"))
                 .with_content_type(mime::TEXT_CSS))
-        },
+        }
 
         (&Method::GET, "/images/background.png") => {
-            return Ok(Response::from_body(include_bytes!("static/images/background.png").to_vec())
-                .with_content_type(mime::IMAGE_PNG))
+            return Ok(
+                Response::from_body(include_bytes!("static/images/background.png").to_vec())
+                    .with_content_type(mime::IMAGE_PNG),
+            )
         }
 
         _ => {}
@@ -118,14 +121,18 @@ fn main(req: Request) -> Result<Response, Error> {
     }
 }
 
-fn handle_action(mut req: Request, mut state: ApplicationState, pages: &TemplateRenderer) -> Result<Response, Error> {
+fn handle_action(
+    mut req: Request,
+    mut state: ApplicationState,
+    pages: &TemplateRenderer,
+) -> Result<Response, Error> {
     // Sets up a GitHub client with app credentials that we can use throughout the request
     let mut gh = GitHubClient::get_default()?;
 
     // Add a user access token to the GitHub client if defined
     gh.user_access_token = match state.login.github_token.as_ref() {
         Some(token) => Some(token.to_string()),
-        None => None
+        None => None,
     };
 
     // Fetch the currently active GitHub user, if authenticated
@@ -134,7 +141,7 @@ fn handle_action(mut req: Request, mut state: ApplicationState, pages: &Template
     // Add a user access token to the Fastly client if defined
     let mut fastly_client = match state.login.fastly_token.as_ref() {
         Some(token) => FastlyClient::from_token(token.to_string()),
-        None => FastlyClient::new()
+        None => FastlyClient::new(),
     };
 
     // Fetch the currently active Fastly user, if authenticated
@@ -152,14 +159,26 @@ fn handle_action(mut req: Request, mut state: ApplicationState, pages: &Template
             match gh.fork_repository(&nwo) {
                 Ok(repo) => {
                     // Redirect back to deploy flow with the "Active-Fork" cookie set
-                    let resp =
-                        Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, format!("/{}", nwo));
+                    let resp = Response::from_status(StatusCode::FOUND)
+                        .with_header(header::LOCATION, format!("/{}", nwo));
 
-                    state.deploy.dest = Some(format!("{}+{}/{}", params.repository, repo.owner.login, repo.name));
+                    state.deploy.dest = Some(format!(
+                        "{}+{}/{}",
+                        params.repository, repo.owner.login, repo.name
+                    ));
                     Ok(update_state(resp, &state))
                 }
                 Err(err) => bail!("Unable to fork repository: {}", err),
             }
+        }
+
+        (&Method::POST, "/deploy/reset") => {
+            // Clear deploy state
+            state.deploy = DeploymentState::empty();
+
+            let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/");
+
+            Ok(update_state(resp, &state))
         }
 
         (&Method::POST, "/deploy") => {
@@ -211,13 +230,13 @@ fn handle_action(mut req: Request, mut state: ApplicationState, pages: &Template
             println!("Manifest pushed to repository");
 
             let resp = Response::from_status(StatusCode::NOT_IMPLEMENTED)
-            .with_content_type(mime::TEXT_HTML_UTF_8)
-            .with_body(pages.render_success_page(SuccessContext {
-                application_url: format!("https://{}", &service.domain.unwrap()),
-                actions_url: format!("https://github.com/{}/actions", params.repository),
-                repo_nwo: params.repository,
-                service_id: service.id,
-            }));
+                .with_content_type(mime::TEXT_HTML_UTF_8)
+                .with_body(pages.render_success_page(SuccessContext {
+                    application_url: format!("https://{}", &service.domain.unwrap()),
+                    actions_url: format!("https://github.com/{}/actions", params.repository),
+                    repo_nwo: params.repository,
+                    service_id: service.id,
+                }));
 
             // Reset deployment state so we don't put the user back into the flow
             state.deploy = DeploymentState::empty();
@@ -352,7 +371,11 @@ fn get_return_url(state: &ApplicationState) -> String {
 fn update_state(resp: Response, state: &ApplicationState) -> Response {
     resp.with_header(
         header::SET_COOKIE,
-        format!("{}={}; Secure; HttpOnly; Path=/;", STATE_COOKIE, base64::encode(serde_json::to_string(state).unwrap())),
+        format!(
+            "{}={}; Secure; HttpOnly; Path=/;",
+            STATE_COOKIE,
+            base64::encode(serde_json::to_string(state).unwrap())
+        ),
     )
 }
 

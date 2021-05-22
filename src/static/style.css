@@ -12,6 +12,12 @@ h2 {
   font-size: 1.2rem;
 }
 
+@media (max-width: 1200px) {
+  .resume + .content {
+    margin-top: 108px !important;
+  }
+}
+
 .resume {
   position: absolute;
   top: 0;
@@ -21,6 +27,9 @@ h2 {
   background-color: #F8F9FA;
   border-radius: 6px;
   border: 2px #1c1c1c solid;
+
+  display: flex;
+  max-width: 500px;
 
   transform: translateY(-20px);
   opacity: 0;
@@ -35,6 +44,25 @@ h2 {
 .resume p {
   margin: 0;
 }
+
+.resume input[type="submit"] {
+  padding: 6px;
+  font-size: 0.8rem;
+  margin: 0;
+  margin-left: 24px;
+
+  border: 1px solid #04B2E1;
+  background: none;
+  color: #04B2E1;
+}
+
+
+.resume input[type="submit"]:hover {
+  border: 1px solid #018aaf;
+  background: none;
+  color: #018aaf;
+}
+
 
 .content {
   display: flex;
