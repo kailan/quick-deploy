@@ -97,33 +97,30 @@ fn main(req: Request) -> Result<Response, Error> {
                     previous_deployment: state.deploy.src,
                 }));
 
-            return Ok(resp);
+            Ok(resp)
         }
 
         (&Method::GET, "/style.css") => {
-            return Ok(Response::from_body(include_str!("static/style.css"))
+            Ok(Response::from_body(include_str!("static/style.css"))
                 .with_content_type(mime::TEXT_CSS))
         }
 
-        (&Method::GET, "/images/background.png") => {
-            return Ok(
-                Response::from_body(include_bytes!("static/images/background.png").to_vec())
-                    .with_content_type(mime::IMAGE_PNG),
-            )
-        }
+        (&Method::GET, "/images/background.png") => Ok(Response::from_body(
+            include_bytes!("static/images/background.png").to_vec(),
+        )
+        .with_content_type(mime::IMAGE_PNG)),
 
-        _ => {}
-    }
+        (&Method::GET, "/robots.txt") => Ok(Response::from_body(include_str!("static/robots.txt"))
+            .with_content_type(mime::TEXT_PLAIN)),
 
-    match handle_action(req, state, &pages) {
-        Ok(resp) => Ok(resp),
-        Err(err) => {
-            return Ok(Response::from_status(StatusCode::INTERNAL_SERVER_ERROR)
+        _ => match handle_action(req, state, &pages) {
+            Ok(resp) => Ok(resp),
+            Err(err) => Ok(Response::from_status(StatusCode::INTERNAL_SERVER_ERROR)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_error_page(ErrorContext {
                     message: err.to_string(),
-                })))
-        }
+                }))),
+        },
     }
 }
 
@@ -168,10 +165,7 @@ fn handle_action(
                     let resp = Response::from_status(StatusCode::FOUND)
                         .with_header(header::LOCATION, format!("/{}", nwo));
 
-                    state.deploy.dest = Some(format!(
-                        "{}+{}/{}",
-                        nwo, repo.owner.login, repo.name
-                    ));
+                    state.deploy.dest = Some(format!("{}+{}/{}", nwo, repo.owner.login, repo.name));
                     Ok(update_state(resp, &state))
                 }
                 Err(err) => bail!("Unable to fork repository: {}", err),
@@ -185,7 +179,7 @@ fn handle_action(
             let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/");
 
             Ok(update_state(resp, &state))
-        },
+        }
 
         (&Method::POST, "/deploy") => {
             // Parse the form params to get the src and dest repository
@@ -211,11 +205,19 @@ fn handle_action(
             let config_spec = DeployConfigSpec::from_toml(&manifest_file.content)?;
 
             // Generate a random name "quick-like-this"
-            let slug = format!("quick-{}", parity_wordlist::random_phrase(2).replace(' ', "-"));
+            let slug = format!(
+                "quick-{}",
+                parity_wordlist::random_phrase(2).replace(' ', "-")
+            );
 
             // Create Fastly service
-            let service = fastly_client
-                .create_service(&slug, DeployConfig { spec: config_spec, params })?;
+            let service = fastly_client.create_service(
+                &slug,
+                DeployConfig {
+                    spec: config_spec,
+                    params,
+                },
+            )?;
             println!("Service created (ID {})", service.id);
 
             // Update service ID in manifest
@@ -253,19 +255,22 @@ fn handle_action(
             state.deploy = DeploymentState::default();
 
             return Ok(update_state(resp, &state));
-        },
+        }
 
         (&Method::POST, "/auth/reset") => {
             // Clear deploy state
             state.login = LoginState::default();
 
-            let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, match &state.deploy.src {
-                Some(src) => format!("/{}", src),
-                None => "/".into()
-            });
+            let resp = Response::from_status(StatusCode::FOUND).with_header(
+                header::LOCATION,
+                match &state.deploy.src {
+                    Some(src) => format!("/{}", src),
+                    None => "/".into(),
+                },
+            );
 
             Ok(update_state(resp, &state))
-        },
+        }
 
         (&Method::POST, "/auth/fastly") => {
             // Parse the form params to get the Fastly API token
@@ -347,7 +352,10 @@ fn handle_action(
 
             // Ensure repo is a template repository
             if !repo.is_template {
-                bail!("The chosen source is not a template repository: github.com{}", path);
+                bail!(
+                    "The chosen source is not a template repository: github.com{}",
+                    path
+                );
             }
 
             let can_deploy =
@@ -358,7 +366,7 @@ fn handle_action(
                 match gh.anonymous().get_file(&src_nwo, "fastly.toml")? {
                     Some(file) => Some(match DeployConfigSpec::from_toml(&file.content) {
                         Ok(spec) => spec,
-                        Err(err) => bail!("Could not parse fastly.toml: {}", err)
+                        Err(err) => bail!("Could not parse fastly.toml: {}", err),
                     }),
                     None => bail!("The repository does not contain a fastly.toml file."),
                 }
