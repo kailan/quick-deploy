@@ -32,7 +32,7 @@ pub struct DeployConfigSpec {
 pub struct BackendSpec {
   pub prompt: Option<String>,
   pub name: String,
-  pub host: String,
+  pub address: String,
   pub port: Option<i32>,
 }
 

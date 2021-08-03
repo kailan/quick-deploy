@@ -99,7 +99,7 @@ impl FastlyClient {
     if deploy.spec.backends.len() == 0 {
       deploy.spec.backends.push(BackendSpec {
         name: "127.0.0.1".to_string(),
-        host: "127.0.0.1".to_string(),
+        address: "127.0.0.1".to_string(),
         port: None,
         prompt: None,
       });
@@ -117,7 +117,7 @@ impl FastlyClient {
         .with_pass(true)
         .with_body_json(&FastlyBackend {
           name: backend.name.to_owned(),
-          address: backend.host,
+          address: backend.address,
           port: backend.port.unwrap_or(80),
         }) {
         Ok(req) => req,
@@ -179,7 +179,7 @@ impl FastlyClient {
         .with_body_json(&FastlyDictionaryUpdateRequest { items: entries })?
         .send(API_BACKEND)
       {
-        Ok(mut resp) => {
+        Ok(_) => {
           println!("Populated dictionary {} with {} items", dict.name, entry_count);
         },
         Err(err) => bail!(
