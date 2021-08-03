@@ -113,6 +113,9 @@ fn main(req: Request) -> Result<Response, Error> {
         (&Method::GET, "/robots.txt") => Ok(Response::from_body(include_str!("static/robots.txt"))
             .with_content_type(mime::TEXT_PLAIN)),
 
+        (&Method::GET, "/favicon.ico") => Ok(Response::from_body(include_bytes!("static/images/favicon.ico").to_vec())
+            .with_header(header::CONTENT_TYPE, "image/x-icon")),
+
         _ => match handle_action(req, state, &pages) {
             Ok(resp) => Ok(resp),
             Err(err) => Ok(Response::from_status(StatusCode::INTERNAL_SERVER_ERROR)
