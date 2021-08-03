@@ -1,6 +1,7 @@
 use crate::config::BackendSpec;
 use crate::config::DeployConfig;
 use anyhow::{bail, Result};
+use fastly::http::StatusCode;
 use fastly::{
   http::{header, Method},
   Request,
@@ -43,23 +44,23 @@ impl FastlyClient {
       "https://api.fastly.com/current_user",
     ));
     let mut resp = req.send(API_BACKEND)?;
-    match resp.take_body_json::<FastlyUser>() {
-      Ok(user) => Ok(Some(user)),
-      Err(err) => bail!(err),
+    match resp.get_status() {
+      StatusCode::OK => Ok(Some(resp.take_body_json::<FastlyUser>()?)),
+      _ => bail!("Unable to authenticate with Fastly")
     }
   }
 
-  pub fn create_service(&self, name: &str, mut deploy: DeployConfig) -> Result<FastlyService> {
+  pub fn create_service(&self, slug: &str, mut deploy: DeployConfig) -> Result<FastlyService> {
     if self.token == None {
       bail!("No Fastly API token set");
     }
 
-    let domain = format!("{}-deploy-demo.edgecompute.app", name);
+    let domain = format!("{}.edgecompute.app", slug);
 
     // Create a service
     let servreq = FastlyServiceRequest {
       service_type: "wasm".to_string(),
-      name: "via Quick Deploy".to_string(),
+      name: format!("{} via Quick Deploy", slug).to_string(),
     };
 
     let req = self
@@ -68,9 +69,9 @@ impl FastlyClient {
       .with_body_json(&servreq)?;
     let mut resp = req.send(API_BACKEND)?;
 
-    let mut service = match resp.take_body_json::<FastlyService>() {
-      Ok(service) => service,
-      Err(err) => bail!("Error while creating service: {}", err),
+    let mut service = match resp.get_status() {
+      StatusCode::OK => resp.take_body_json::<FastlyService>()?,
+      _ => bail!("Error while creating service: {}", resp.take_body_str())
     };
     println!("Created service {}", service.id);
 

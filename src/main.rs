@@ -33,6 +33,15 @@ struct LoginState {
     pub github_token: Option<String>,
 }
 
+impl Default for LoginState {
+    fn default() -> LoginState {
+        LoginState {
+            fastly_token: None,
+            github_token: None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct DeploymentState {
     pub src: Option<GitHubNWO>,
@@ -40,8 +49,8 @@ struct DeploymentState {
     pub fastly_service_id: Option<String>,
 }
 
-impl DeploymentState {
-    fn empty() -> DeploymentState {
+impl Default for DeploymentState {
+    fn default() -> DeploymentState {
         DeploymentState {
             src: None,
             dest: None,
@@ -72,11 +81,8 @@ fn main(req: Request) -> Result<Response, Error> {
                 .unwrap()
         }
         None => ApplicationState {
-            login: LoginState {
-                fastly_token: None,
-                github_token: None,
-            },
-            deploy: DeploymentState::empty(),
+            login: LoginState::default(),
+            deploy: DeploymentState::default(),
         },
     };
 
@@ -156,7 +162,7 @@ fn handle_action(
             println!("Forking {}", nwo);
 
             // Fork the repository
-            match gh.fork_repository(&nwo) {
+            match gh.fork_repository(&nwo, nwo.split('/').last().unwrap()) {
                 Ok(repo) => {
                     // Redirect back to deploy flow with the "Active-Fork" cookie set
                     let resp = Response::from_status(StatusCode::FOUND)
@@ -174,12 +180,12 @@ fn handle_action(
 
         (&Method::POST, "/deploy/reset") => {
             // Clear deploy state
-            state.deploy = DeploymentState::empty();
+            state.deploy = DeploymentState::default();
 
             let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/");
 
             Ok(update_state(resp, &state))
-        }
+        },
 
         (&Method::POST, "/deploy") => {
             // Parse the form params to get the src and dest repository
@@ -204,9 +210,12 @@ fn handle_action(
             // Deserialize manifest TOML to fetch setup spec
             let config_spec = DeployConfigSpec::from_toml(&manifest_file.content)?;
 
+            // Generate a random name "quick-like-this"
+            let slug = format!("quick-{}", parity_wordlist::random_phrase(2).replace(' ', "-"));
+
             // Create Fastly service
             let service = fastly_client
-                .create_service(&gh_user.unwrap().login, DeployConfig { spec: config_spec, params })?;
+                .create_service(&slug, DeployConfig { spec: config_spec, params })?;
             println!("Service created (ID {})", service.id);
 
             // Update service ID in manifest
@@ -241,10 +250,22 @@ fn handle_action(
                 }));
 
             // Reset deployment state so we don't put the user back into the flow
-            state.deploy = DeploymentState::empty();
+            state.deploy = DeploymentState::default();
 
             return Ok(update_state(resp, &state));
-        }
+        },
+
+        (&Method::POST, "/auth/reset") => {
+            // Clear deploy state
+            state.login = LoginState::default();
+
+            let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, match &state.deploy.src {
+                Some(src) => format!("/{}", src),
+                None => "/".into()
+            });
+
+            Ok(update_state(resp, &state))
+        },
 
         (&Method::POST, "/auth/fastly") => {
             // Parse the form params to get the Fastly API token
@@ -324,13 +345,21 @@ fn handle_action(
                 None => bail!("No repository was found at github.com{}", path),
             };
 
+            // Ensure repo is a template repository
+            if !repo.is_template {
+                bail!("The chosen source is not a template repository: github.com{}", path);
+            }
+
             let can_deploy =
                 gh_user.is_some() && fastly_user.is_some() && dest_repository.is_some();
 
             // Fetch manifest file from repo
             let config_spec = if can_deploy {
                 match gh.anonymous().get_file(&src_nwo, "fastly.toml")? {
-                    Some(file) => Some(DeployConfigSpec::from_toml(&file.content)?),
+                    Some(file) => Some(match DeployConfigSpec::from_toml(&file.content) {
+                        Ok(spec) => spec,
+                        Err(err) => bail!("Could not parse fastly.toml: {}", err)
+                    }),
                     None => bail!("The repository does not contain a fastly.toml file."),
                 }
             } else {

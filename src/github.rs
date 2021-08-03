@@ -5,6 +5,7 @@ use fastly::{
 };
 use sealed_box::PublicKey;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::convert::TryInto;
 
 const AUTH_BACKEND: &str = "github.com";
@@ -46,7 +47,7 @@ impl GitHubClient {
   pub fn github_request(&self, req: Request) -> Request {
     let mut req = req
       .with_header(header::USER_AGENT, USER_AGENT)
-      .with_header(header::ACCEPT, "application/json");
+      .with_header(header::ACCEPT, "application/vnd.github.baptiste-preview+json");
     if let Some(token) = &self.user_access_token {
       req.set_header(header::AUTHORIZATION, format!("token {}", token));
       req.set_pass(true);
@@ -107,15 +108,16 @@ impl GitHubClient {
     }
   }
 
-  pub fn fork_repository(&self, nwo: &str) -> Result<GitHubRepository> {
+  pub fn fork_repository(&self, nwo: &str, dst_name: &str) -> Result<GitHubRepository> {
+    let body = json!({"name": dst_name});
     let req = self.github_request(Request::new(
       Method::POST,
-      format!("https://api.github.com/repos/{}/forks", nwo),
-    ));
+      format!("https://api.github.com/repos/{}/generate", nwo),
+    )).with_pass(true).with_body_json(&body).unwrap();
     let mut resp = req.send(API_BACKEND)?;
-    match resp.take_body_json::<GitHubRepository>() {
-      Ok(repo) => Ok(repo),
-      Err(err) => bail!("Unable to fork GitHub repository {}: {}", nwo, err),
+    match resp.get_status() {
+      StatusCode::CREATED => Ok(resp.take_body_json::<GitHubRepository>()?),
+      _ => bail!("Unable to fork GitHub repository {}: {}", nwo, resp.take_body_str())
     }
   }
 
@@ -258,6 +260,7 @@ pub struct GitHubRepository {
   pub owner: GitHubUser,
   pub forks_count: i32,
   pub stargazers_count: i32,
+  pub is_template: bool
 }
 
 #[derive(Deserialize, Serialize)]
