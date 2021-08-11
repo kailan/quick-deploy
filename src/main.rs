@@ -75,7 +75,7 @@ fn main(req: Request) -> Result<Response, Error> {
     let cookies = get_cookies(&req);
 
     // Parse state cookie
-    let state: ApplicationState = match get_cookie(&cookies, STATE_COOKIE) {
+    let mut state: ApplicationState = match get_cookie(&cookies, STATE_COOKIE) {
         Some(state_cookie) => {
             serde_json::from_str(&String::from_utf8(base64::decode(state_cookie).unwrap()).unwrap())
                 .unwrap()
@@ -115,6 +115,30 @@ fn main(req: Request) -> Result<Response, Error> {
 
         (&Method::GET, "/favicon.ico") => Ok(Response::from_body(include_bytes!("static/images/favicon.ico").to_vec())
             .with_header(header::CONTENT_TYPE, "image/x-icon")),
+
+        (&Method::POST, "/auth/reset") => {
+            // Clear deploy state
+            state.login = LoginState::default();
+
+            let resp = Response::from_status(StatusCode::FOUND).with_header(
+                header::LOCATION,
+                match &state.deploy.src {
+                    Some(src) => format!("/{}", src),
+                    None => "/".into(),
+                },
+            );
+
+            Ok(update_state(resp, &state))
+        },
+
+        (&Method::POST, "/deploy/reset") => {
+            // Clear deploy state
+            state.deploy = DeploymentState::default();
+
+            let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/");
+
+            Ok(update_state(resp, &state))
+        },
 
         _ => match handle_action(req, state, &pages) {
             Ok(resp) => Ok(resp),
@@ -173,15 +197,6 @@ fn handle_action(
                 }
                 Err(err) => bail!("Unable to fork repository: {}", err),
             }
-        }
-
-        (&Method::POST, "/deploy/reset") => {
-            // Clear deploy state
-            state.deploy = DeploymentState::default();
-
-            let resp = Response::from_status(StatusCode::FOUND).with_header(header::LOCATION, "/");
-
-            Ok(update_state(resp, &state))
         }
 
         (&Method::POST, "/deploy") => {
@@ -256,21 +271,6 @@ fn handle_action(
 
             // Reset deployment state so we don't put the user back into the flow
             state.deploy = DeploymentState::default();
-
-            return Ok(update_state(resp, &state));
-        }
-
-        (&Method::POST, "/auth/reset") => {
-            // Clear deploy state
-            state.login = LoginState::default();
-
-            let resp = Response::from_status(StatusCode::FOUND).with_header(
-                header::LOCATION,
-                match &state.deploy.src {
-                    Some(src) => format!("/{}", src),
-                    None => "/".into(),
-                },
-            );
 
             Ok(update_state(resp, &state))
         }
