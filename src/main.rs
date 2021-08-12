@@ -47,6 +47,7 @@ struct DeploymentState {
     pub src: Option<GitHubNWO>,
     pub dest: Option<GitHubNWO>,
     pub fastly_service_id: Option<String>,
+    pub fastly_domain: Option<String>
 }
 
 impl Default for DeploymentState {
@@ -55,6 +56,7 @@ impl Default for DeploymentState {
             src: None,
             dest: None,
             fastly_service_id: None,
+            fastly_domain: None
         }
     }
 }
@@ -93,8 +95,7 @@ fn main(req: Request) -> Result<Response, Error> {
             let resp = Response::from_status(StatusCode::OK)
                 .with_content_type(mime::TEXT_HTML_UTF_8)
                 .with_body(pages.render_index_page(IndexContext {
-                    button_nwo: params.repository,
-                    previous_deployment: state.deploy.src,
+                    button_nwo: params.repository
                 }));
 
             Ok(resp)
@@ -199,6 +200,32 @@ fn handle_action(
             }
         }
 
+        (&Method::GET, "/deploy/status") => {
+            let nwo = match state.deploy.dest.as_ref() {
+                Some(domain) => domain.split('+').last().expect("Invalid dest NWO pair"),
+                None => bail!("GitHub repository has not been provisioned")
+            };
+
+            let service_id = match state.deploy.fastly_service_id {
+                Some(domain) => domain,
+                None => bail!("Fastly service has not been provisioned")
+            };
+            let service_domain = state.deploy.fastly_domain.expect("Service is provisioned without domain");
+
+            let is_ready = fastly_client.check_service_deployment(&service_id)?;
+
+            let resp = Response::from_status(StatusCode::NOT_IMPLEMENTED)
+                .with_content_type(mime::TEXT_HTML_UTF_8)
+                .with_body(pages.render_success_page(SuccessContext {
+                    application_url: format!("https://{}", service_domain),
+                    actions_url: format!("https://github.com/{}/actions", nwo),
+                    repo_nwo: nwo.to_string(),
+                    service_id,
+                    is_ready
+                }));
+            Ok(resp)
+        }
+
         (&Method::POST, "/deploy") => {
             // Parse the form params to get the src and dest repository
             let params: ActionParams = req.take_body_form()?;
@@ -236,6 +263,8 @@ fn handle_action(
                     params,
                 },
             )?;
+            state.deploy.fastly_service_id = Some(service.id.to_owned());
+            state.deploy.fastly_domain = Some(service.domain.expect("Domain was not created"));
             println!("Service created (ID {})", service.id);
 
             // Update service ID in manifest
@@ -260,17 +289,8 @@ fn handle_action(
             gh.upsert_file(&nwo, &manifest_file, &output)?;
             println!("Manifest pushed to repository");
 
-            let resp = Response::from_status(StatusCode::NOT_IMPLEMENTED)
-                .with_content_type(mime::TEXT_HTML_UTF_8)
-                .with_body(pages.render_success_page(SuccessContext {
-                    application_url: format!("https://{}", &service.domain.unwrap()),
-                    actions_url: format!("https://github.com/{}/actions", nwo),
-                    repo_nwo: nwo,
-                    service_id: service.id,
-                }));
-
-            // Reset deployment state so we don't put the user back into the flow
-            state.deploy = DeploymentState::default();
+            let resp = Response::from_status(StatusCode::FOUND)
+                .with_header(header::LOCATION, "/deploy/status");
 
             Ok(update_state(resp, &state))
         }

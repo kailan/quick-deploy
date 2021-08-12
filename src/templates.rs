@@ -31,12 +31,12 @@ pub struct SuccessContext {
   pub actions_url: String,
   pub repo_nwo: GitHubNWO,
   pub service_id: String,
+  pub is_ready: bool
 }
 
 #[derive(Serialize)]
 pub struct IndexContext {
-  pub button_nwo: Option<String>,
-  pub previous_deployment: Option<GitHubNWO>
+  pub button_nwo: Option<String>
 }
 
 impl TemplateRenderer<'_> {

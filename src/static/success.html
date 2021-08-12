@@ -8,27 +8,39 @@
   <link rel="stylesheet" href="/style.css" />
   <link href="https://fonts.googleapis.com/css?family=Inter" rel="stylesheet" type="text/css">
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  {{ if not is_ready }}
+  <meta http-equiv="refresh" content="10" />
+  {{ endif }}
 </head>
 
 <body>
   <div class="content">
-    <h1>
-      Provisioning successful
-    </h1>
-
+    {{ if is_ready }}
+    <h1>Provisioning successful</h1>
     <br/>
+    {{ else }}
+    <div class="loader"></div>
+    {{ endif }}
 
     <h2>
+      {{ if is_ready }}
       <a href="{ application_url }" target="_blank">{ application_url }</a>
+      {{ else }}
+      <span class="muted">{ application_url }</span>
+      {{ endif }}
     </h2>
 
     <br/>
 
+    {{ if is_ready }}
+    <p>Your application is now live on Compute@Edge. View the build logs in <a href="{ actions_url }" target="_blank">GitHub Actions</a>. Your Fastly service ID is <a href="https://manage.fastly.com/configure/services/{ service_id }" target="_blank"><kbd>{ service_id }</kbd></a>.</kbd></p>
+    {{ else }}
     <p>Your application is now deploying to Compute@Edge. For most projects, this will only take a few minutes. View the logs in <a href="{ actions_url }" target="_blank">GitHub Actions</a>. Your Fastly service ID is <a href="https://manage.fastly.com/configure/services/{ service_id }" target="_blank"><kbd>{ service_id }</kbd></a>.</kbd></p>
+    {{ endif }}
 
     <br/>
 
-    <p>It's worth noting that you may see "Internal Server Error" for a few seconds before your app is fully deployed. If this persists after 2 minutes, follow the <a href="https://developer.fastly.com/learning/compute/testing/">testing and debugging</a> guide to resolve the issue.</p>
+    <p>It's worth noting that you may see "Internal Service Error" for a few seconds before your app is fully deployed. If this persists after 2 minutes, follow the <a href="https://developer.fastly.com/learning/compute/testing/">testing and debugging</a> guide to resolve the issue.</p>
 
     <br />
 

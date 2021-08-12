@@ -11,19 +11,6 @@
 </head>
 
 <body>
-  {{ if previous_deployment }}
-  <div class="resume">
-    <div class="message">
-      <h3>You were previously deploying <strong>{previous_deployment}</strong></h3>
-      <p>Would you like to <a href="/{previous_deployment}">continue deployment</a>?</p>
-    </div>
-    <div class="actions">
-      <form action="/deploy/reset" method="post">
-        <input type="submit" value="Cancel">
-      </form>
-    </div>
-  </div>
-  {{ endif }}
   <div class="content">
     <h1>Make your Compute@Edge solutions deployable in one click</h1>
     <p><strong>This service is in development and not yet ready for public use. Deployments are likely to fail.</strong></p>

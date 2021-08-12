@@ -25,13 +25,17 @@ impl FastlyClient {
     FastlyClient { token: None }
   }
 
-  pub fn fastly_request(&self, req: Request) -> Request {
-    req
+  pub fn fastly_request(&self, req: Request) -> Result<Request> {
+    if self.token == None {
+      bail!("No Fastly API token set");
+    }
+
+    Ok(req
       .with_header(header::USER_AGENT, USER_AGENT)
       .with_header(header::HOST, "api.fastly.com")
       .with_header(header::ACCEPT, "application/json")
       .with_header("Fastly-Key", self.token.as_ref().unwrap())
-      .with_pass(true)
+      .with_pass(true))
   }
 
   pub fn fetch_user(&self) -> Result<Option<FastlyUser>> {
@@ -42,7 +46,7 @@ impl FastlyClient {
     let req = self.fastly_request(Request::new(
       Method::GET,
       "https://api.fastly.com/current_user",
-    ));
+    ))?;
     let mut resp = req.send(API_BACKEND)?;
     match resp.get_status() {
       StatusCode::OK => Ok(Some(resp.take_body_json::<FastlyUser>()?)),
@@ -51,10 +55,6 @@ impl FastlyClient {
   }
 
   pub fn create_service(&self, slug: &str, mut deploy: DeployConfig) -> Result<FastlyService> {
-    if self.token == None {
-      bail!("No Fastly API token set");
-    }
-
     let domain = format!("{}.edgecompute.app", slug);
 
     // Create a service
@@ -64,7 +64,7 @@ impl FastlyClient {
     };
 
     let req = self
-      .fastly_request(Request::new(Method::POST, "https://api.fastly.com/service"))
+      .fastly_request(Request::new(Method::POST, "https://api.fastly.com/service"))?
       .with_pass(true)
       .with_body_json(&servreq)?;
     let mut resp = req.send(API_BACKEND)?;
@@ -83,7 +83,7 @@ impl FastlyClient {
           "https://api.fastly.com/service/{}/version/1/domain",
           service.id
         ),
-      ))
+      ))?
       .with_pass(true)
       .with_body_json(&FastlyDomain { name: domain })?;
     let mut resp = req.send(API_BACKEND)?;
@@ -114,7 +114,7 @@ impl FastlyClient {
             "https://api.fastly.com/service/{}/version/1/backend",
             service.id
           ),
-        ))
+        ))?
         .with_pass(true)
         .with_body_json(&FastlyBackend {
           name: backend.name.to_owned(),
@@ -137,7 +137,7 @@ impl FastlyClient {
             "https://api.fastly.com/service/{}/version/1/dictionary",
             service.id
           ),
-        ))
+        ))?
         .with_pass(true)
         .with_body_json(&FastlyDictionary {
           id: None,
@@ -175,7 +175,7 @@ impl FastlyClient {
             service.id,
             created_dict.id.unwrap()
           ),
-        ))
+        ))?
         .with_pass(true)
         .with_body_json(&FastlyDictionaryUpdateRequest { items: entries })?
         .send(API_BACKEND)
@@ -184,7 +184,7 @@ impl FastlyClient {
           println!("Populated dictionary {} with {} items", dict.name, entry_count);
         },
         Err(err) => bail!(
-          "Error while adding items to dictionary {}: {}",
+          "Error while adding items to dictionary {}: {:?}",
           dict.name,
           err
         ),
@@ -192,6 +192,18 @@ impl FastlyClient {
     }
 
     Ok(service)
+  }
+
+  pub fn check_service_deployment(&self, service_id: &str) -> Result<bool> {
+    let req = self.fastly_request(Request::new(
+      Method::GET,
+      format!("https://api.fastly.com/service/{}/version/1", service_id),
+    ))?;
+    let mut resp = req.send(API_BACKEND)?;
+    match resp.get_status() {
+      StatusCode::OK => Ok(resp.take_body_json::<FastlyServiceStatusResponse>()?.active),
+      _ => bail!("Unable to authenticate with Fastly")
+    }
   }
 }
 
@@ -206,6 +218,11 @@ pub struct FastlyServiceRequest {
 pub struct FastlyService {
   pub id: String,
   pub domain: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct FastlyServiceStatusResponse {
+  pub active: bool
 }
 
 #[derive(Serialize, Deserialize)]
