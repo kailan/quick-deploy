@@ -16,13 +16,13 @@
 <body>
   <div class="content">
     {{ if is_ready }}
-    <h1>Provisioning successful</h1>
+    <h1>Provisioning successful 🎉</h1>
     <br/>
     {{ else }}
     <div class="loader"></div>
     {{ endif }}
 
-    <h2>
+    <h2 class="applink">
       {{ if is_ready }}
       <a href="{ application_url }" target="_blank">{ application_url }</a>
       {{ else }}

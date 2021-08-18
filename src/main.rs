@@ -103,19 +103,19 @@ fn main(req: Request) -> Result<Response, Error> {
 
         (&Method::GET, "/style.css") => {
             Ok(Response::from_body(include_str!("static/style.css"))
-                .with_content_type(mime::TEXT_CSS))
+                .with_content_type(mime::TEXT_CSS).with_header(header::CACHE_CONTROL, "public, max-age=1800"))
         }
 
         (&Method::GET, "/images/background.png") => Ok(Response::from_body(
             include_bytes!("static/images/background.png").to_vec(),
         )
-        .with_content_type(mime::IMAGE_PNG)),
+        .with_content_type(mime::IMAGE_PNG).with_header(header::CACHE_CONTROL, "public, max-age=1800")),
 
         (&Method::GET, "/robots.txt") => Ok(Response::from_body(include_str!("static/robots.txt"))
             .with_content_type(mime::TEXT_PLAIN)),
 
         (&Method::GET, "/favicon.ico") => Ok(Response::from_body(include_bytes!("static/images/favicon.ico").to_vec())
-            .with_header(header::CONTENT_TYPE, "image/x-icon")),
+            .with_header(header::CONTENT_TYPE, "image/x-icon").with_header(header::CACHE_CONTROL, "public, max-age=1800")),
 
         (&Method::POST, "/auth/reset") => {
             // Clear deploy state
@@ -201,15 +201,16 @@ fn handle_action(
         }
 
         (&Method::GET, "/deploy/status") => {
+            let service_id = match state.deploy.fastly_service_id {
+                Some(domain) => domain,
+                None => bail!("Fastly service has not been provisioned")
+            };
+
             let nwo = match state.deploy.dest.as_ref() {
                 Some(domain) => domain.split('+').last().expect("Invalid dest NWO pair"),
                 None => bail!("GitHub repository has not been provisioned")
             };
 
-            let service_id = match state.deploy.fastly_service_id {
-                Some(domain) => domain,
-                None => bail!("Fastly service has not been provisioned")
-            };
             let service_domain = state.deploy.fastly_domain.expect("Service is provisioned without domain");
 
             let is_ready = fastly_client.check_service_deployment(&service_id)?;
@@ -223,7 +224,13 @@ fn handle_action(
                     service_id,
                     is_ready
                 }));
-            Ok(resp)
+
+            if is_ready {
+                state.deploy = DeploymentState::default();
+                Ok(update_state(resp, &state))
+            } else {
+                Ok(resp)
+            }
         }
 
         (&Method::POST, "/deploy") => {

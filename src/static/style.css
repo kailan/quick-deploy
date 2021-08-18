@@ -28,10 +28,18 @@ h2 {
   border-radius: 6px;
 }
 
+.muted {
+  color: #b8b8b8;
+}
+
 .content h2 {
   font-size: 1.5rem;
   margin-top: 8px;
   color: #2D3741;
+}
+
+h2.applink {
+  text-align: center;
 }
 
 .repo .stat {
