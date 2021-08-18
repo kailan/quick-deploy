@@ -1,6 +1,6 @@
 # Compute@Edge quick deploy
 
-## https://deploy.edgecompute.app
+## This repository has been archived, but the service lives on at https://deploy.edgecompute.app
 
 Hosts a service that can fork C@E starter kits, set up a Fastly service, and set up GitHub Actions to deploy automatically. This aims to replicate the "Click to Deploy" functionality of similar services. It is more of a "provisioning tool" than a "deployment tool".
 
